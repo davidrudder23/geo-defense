@@ -27,6 +27,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -80,10 +81,12 @@ fun TopBar(
     hud: HudState,
     paused: Boolean,
     speed: Int,
-    soundOn: Boolean,
+    musicOn: Boolean,
+    effectsOn: Boolean,
     onTogglePause: () -> Unit,
     onCycleSpeed: () -> Unit,
-    onToggleSound: () -> Unit,
+    onToggleMusic: () -> Unit,
+    onToggleEffects: () -> Unit,
 ) {
     Row(
         modifier = Modifier
@@ -99,11 +102,11 @@ fun TopBar(
         )
         Spacer(Modifier.width(14.dp))
         Stat("CASH", hud.money.toString(), Palette.text)
-        Spacer(Modifier.width(14.dp))
+        Spacer(Modifier.width(12.dp))
         Stat("WAVE", hud.wave.coerceAtLeast(1).toString() + "/" + hud.totalWaves, Palette.text)
         Spacer(Modifier.weight(1f))
 
-        // Pause, speed and sound, in the order you reach for them.
+        // Pause, speed, then the two mutes, in the order you reach for them.
         ControlButton(onClick = onTogglePause, active = paused) {
             PauseGlyph(paused = paused, tint = if (paused) Palette.entry else Palette.text)
         }
@@ -115,12 +118,22 @@ fun TopBar(
                 size = 13.sp,
             )
         }
-        Spacer(Modifier.width(6.dp))
-        ControlButton(onClick = onToggleSound, active = false) {
+        Spacer(Modifier.width(5.dp))
+        ControlButton(onClick = onToggleMusic, active = false) {
             ControlLabel(
-                text = if (soundOn) "SND" else "OFF",
-                tint = if (soundOn) Palette.entry else Palette.dim,
+                text = "MUS",
+                tint = if (musicOn) Palette.entry else Palette.dim,
                 size = 9.sp,
+                struck = !musicOn,
+            )
+        }
+        Spacer(Modifier.width(5.dp))
+        ControlButton(onClick = onToggleEffects, active = false) {
+            ControlLabel(
+                text = "SFX",
+                tint = if (effectsOn) Palette.entry else Palette.dim,
+                size = 9.sp,
+                struck = !effectsOn,
             )
         }
     }
@@ -148,13 +161,20 @@ private fun ControlButton(
 }
 
 @Composable
-private fun ControlLabel(text: String, tint: Color, size: androidx.compose.ui.unit.TextUnit) {
+private fun ControlLabel(
+    text: String,
+    tint: Color,
+    size: androidx.compose.ui.unit.TextUnit,
+    /** Strikes the label through, so a muted button reads as off without relying on colour. */
+    struck: Boolean = false,
+) {
     Text(
         text = text,
         color = tint,
         fontSize = size,
         fontWeight = FontWeight.Bold,
         fontFamily = FontFamily.Monospace,
+        textDecoration = if (struck) TextDecoration.LineThrough else null,
     )
 }
 

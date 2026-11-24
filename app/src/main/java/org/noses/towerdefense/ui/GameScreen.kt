@@ -95,8 +95,10 @@ private fun GameEngine.hudState() = HudState(
 fun GameScreen(
     totalWaves: Int,
     sfx: SfxPlayer,
-    soundOn: Boolean,
-    onToggleSound: () -> Unit,
+    musicOn: Boolean,
+    effectsOn: Boolean,
+    onToggleMusic: () -> Unit,
+    onToggleEffects: () -> Unit,
     onPlayAgain: () -> Unit,
     onMenu: () -> Unit,
 ) {
@@ -149,10 +151,12 @@ fun GameScreen(
             hud = hud,
             paused = paused,
             speed = speed,
-            soundOn = soundOn,
+            musicOn = musicOn,
+            effectsOn = effectsOn,
             onTogglePause = { paused = !paused },
             onCycleSpeed = { speed = nextSpeed(speed) },
-            onToggleSound = onToggleSound,
+            onToggleMusic = onToggleMusic,
+            onToggleEffects = onToggleEffects,
         )
 
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {

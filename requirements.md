@@ -64,4 +64,6 @@ it from the entry to the exit.
   upgrading and selling still work while held.
 * A speed button cycling 1x, 2x and 5x, and back to 1x from 5x. The button shows the speed it
   is currently running at.
-* A single sound button mutes and unmutes everything, music and effects together.
+* Two separate sound buttons: one for the music and one for the sound effects, so either can
+  be silenced without the other. A muted button is struck through as well as dimmed, so its
+  state reads without relying on colour.

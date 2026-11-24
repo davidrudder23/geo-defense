@@ -37,8 +37,10 @@ private fun App() {
     var waves by remember { mutableStateOf<Int?>(null) }
     // Bumped to throw away the old game and build a fresh one on "play again".
     var gameId by remember { mutableIntStateOf(0) }
-    // One switch for all audio: the music loop and the effects mixer.
-    var soundOn by remember { mutableStateOf(true) }
+    // Two independent switches. The music loop and the effects mixer are separate tracks, so
+    // they mute separately: wanting the shots without the backing is a normal thing to want.
+    var musicOn by remember { mutableStateOf(true) }
+    var effectsOn by remember { mutableStateOf(true) }
 
     val music = remember { MusicPlayer() }
     val sfx = remember { SfxPlayer() }
@@ -51,12 +53,15 @@ private fun App() {
             sfx.prepare()
         }
         sfx.start()
-        if (soundOn) music.start()
+        if (musicOn) music.start()
     }
 
-    LaunchedEffect(soundOn) {
-        sfx.muted = !soundOn
-        if (soundOn) music.start() else music.pause()
+    LaunchedEffect(musicOn) {
+        if (musicOn) music.start() else music.pause()
+    }
+
+    LaunchedEffect(effectsOn) {
+        sfx.muted = !effectsOn
     }
 
     DisposableEffect(music, sfx) {
@@ -81,8 +86,10 @@ private fun App() {
                 GameScreen(
                     totalWaves = running,
                     sfx = sfx,
-                    soundOn = soundOn,
-                    onToggleSound = { soundOn = !soundOn },
+                    musicOn = musicOn,
+                    effectsOn = effectsOn,
+                    onToggleMusic = { musicOn = !musicOn },
+                    onToggleEffects = { effectsOn = !effectsOn },
                     onPlayAgain = { gameId++ },
                     onMenu = { waves = null },
                 )

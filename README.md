@@ -34,7 +34,8 @@ the difficulty curve is stretched to fit whatever length you choose, so the last
 - **Build anywhere.** There is no road. Towers are walls, so where you put them decides the
   route the enemies take. You cannot seal the exit off completely — that placement is refused.
   The dashed line shows the way through as it currently stands.
-- **Pause, speed and sound** sit in the top right. Speed cycles 1x, 2x, 5x and back to 1x.
+- **Pause, speed, music and effects** sit in the top right. Music and effects mute separately,
+  so you can keep the shots and drop the backing track. Speed cycles 1x, 2x, 5x and back to 1x.
   Building, upgrading and selling all still work while paused.
 - You lose a life for every enemy that walks off the end of the road, two for a square. Twenty
   lives, and the board is lost.
