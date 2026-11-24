@@ -13,6 +13,15 @@ private const val BEAM_HALF_WIDTH = 0.22f
 private const val BULLET_SPEED = 9f
 private const val SHELL_SPEED = 5.5f
 
+/** The longest slice of time the simulation will take in one step. */
+const val MAX_STEP_SECONDS = 0.05f
+
+/**
+ * The most steps one frame may run. Caps how far the game can leap after a stall, and stops a
+ * slow device at 5x speed from spiralling into ever longer frames.
+ */
+const val MAX_STEPS_PER_FRAME = 8
+
 enum class Phase {
     /** Between waves: build, upgrade, then start the next one. */
     READY,
@@ -52,6 +61,9 @@ class GameEngine(
     private var wave: Wave? = null
     private var waveClock: Float = 0f
     private var spawned: Int = 0
+
+    /** Events raised since the last drain; see [drainSounds]. */
+    private val pendingSounds = ArrayList<SoundCue>()
 
     val currentWave: Wave? get() = wave
 
@@ -94,6 +106,7 @@ class GameEngine(
         if (money < price) return false
         money -= price
         tower.applyUpgrade()
+        pendingSounds.add(SoundCue.UPGRADE)
         return true
     }
 
@@ -104,10 +117,38 @@ class GameEngine(
         return true
     }
 
+    /**
+     * Moves everything heard since the last call into [into] and forgets it. The caller owns a
+     * reusable list, so a quiet frame costs nothing.
+     */
+    fun drainSounds(into: MutableList<SoundCue>) {
+        if (pendingSounds.isEmpty()) return
+        into.addAll(pendingSounds)
+        pendingSounds.clear()
+    }
+
     // --- simulation -----------------------------------------------------------------------
 
+    /**
+     * Runs [seconds] of game time, which may be several frames' worth when the game is sped up.
+     *
+     * The work is split into steps of at most [MAX_STEP_SECONDS] rather than handed to [update]
+     * as one long slice. Stepping keeps fast-moving enemies from skipping past a tower's range
+     * between one position and the next, so 5x speed plays the same game as 1x, only quicker.
+     */
+    fun advance(seconds: Float) {
+        var remaining = seconds
+        var steps = 0
+        while (remaining > 0f && steps < MAX_STEPS_PER_FRAME) {
+            val step = kotlin.math.min(remaining, MAX_STEP_SECONDS)
+            update(step)
+            remaining -= step
+            steps++
+        }
+    }
+
     fun update(dt: Float) {
-        val step = dt.coerceIn(0f, 0.05f)
+        val step = dt.coerceIn(0f, MAX_STEP_SECONDS)
         if (finished) {
             ageEffects(step)
             return
@@ -159,6 +200,7 @@ class GameEngine(
                 TowerKind.HEXAGON -> fireShell(tower, target)
                 TowerKind.PLUS -> fireLaser(tower, target)
             }
+            pendingSounds.add(shotCueFor(tower.kind))
             tower.cooldown = tower.fireInterval
         }
     }
@@ -232,6 +274,7 @@ class GameEngine(
     private fun land(shot: Projectile) {
         if (shot.splashRadius > 0f) {
             blasts.add(Blast(shot.position, shot.splashRadius))
+            pendingSounds.add(SoundCue.BLAST_IMPACT)
             for (enemy in enemies) {
                 if (!enemy.alive) continue
                 if (distanceBetween(enemy.position, shot.position) <= shot.splashRadius + enemy.stats.radius) {
@@ -257,6 +300,7 @@ class GameEngine(
             if (!enemy.alive) {
                 money += enemy.stats.reward
                 enemiesKilled++
+                pendingSounds.add(deathCueFor(enemy.kind))
                 walkers.remove()
             }
         }

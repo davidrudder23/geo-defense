@@ -1,7 +1,9 @@
 package org.noses.towerdefense.audio
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.noses.towerdefense.game.SoundCue
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -24,6 +26,19 @@ class MusicExportTest {
         assertTrue(target.exists())
         // 44 byte header plus two bytes a sample.
         assertTrue(target.length() == 44L + samples.size * 2L)
+    }
+
+    @Test
+    fun `exports every sound effect as a wav file`() {
+        val target = File("build/sfx")
+        target.mkdirs()
+        SoundCue.entries.forEach { cue ->
+            val clip = Sfx.render(cue)
+            val file = File(target, cue.name.lowercase() + ".wav")
+            file.writeBytes(wavBytes(clip, Sfx.SAMPLE_RATE))
+            assertTrue(file.length() > 44L)
+        }
+        assertEquals(SoundCue.entries.size, target.listFiles()?.size)
     }
 
     /** Wraps 16-bit mono PCM in the smallest valid WAV header. */

@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.noses.towerdefense.audio.MusicPlayer
+import org.noses.towerdefense.audio.SfxPlayer
 import org.noses.towerdefense.ui.GameScreen
 import org.noses.towerdefense.ui.MenuScreen
 import org.noses.towerdefense.ui.Palette
@@ -36,22 +37,33 @@ private fun App() {
     var waves by remember { mutableStateOf<Int?>(null) }
     // Bumped to throw away the old game and build a fresh one on "play again".
     var gameId by remember { mutableIntStateOf(0) }
-    var musicOn by remember { mutableStateOf(true) }
+    // One switch for all audio: the music loop and the effects mixer.
+    var soundOn by remember { mutableStateOf(true) }
 
     val music = remember { MusicPlayer() }
+    val sfx = remember { SfxPlayer() }
 
-    // Rendering the loop takes a moment, so it happens once, off the main thread.
+    // Rendering the music loop and every effect takes a moment, so it happens once, off the
+    // main thread, before anything tries to play.
     LaunchedEffect(Unit) {
-        withContext(Dispatchers.Default) { music.prepare() }
-        if (musicOn) music.start()
+        withContext(Dispatchers.Default) {
+            music.prepare()
+            sfx.prepare()
+        }
+        sfx.start()
+        if (soundOn) music.start()
     }
 
-    LaunchedEffect(musicOn) {
-        if (musicOn) music.start() else music.pause()
+    LaunchedEffect(soundOn) {
+        sfx.muted = !soundOn
+        if (soundOn) music.start() else music.pause()
     }
 
-    DisposableEffect(music) {
-        onDispose { music.release() }
+    DisposableEffect(music, sfx) {
+        onDispose {
+            music.release()
+            sfx.release()
+        }
     }
 
     Box(
@@ -68,8 +80,9 @@ private fun App() {
             androidx.compose.runtime.key(gameId) {
                 GameScreen(
                     totalWaves = running,
-                    musicOn = musicOn,
-                    onToggleMusic = { musicOn = !musicOn },
+                    sfx = sfx,
+                    soundOn = soundOn,
+                    onToggleSound = { soundOn = !soundOn },
                     onPlayAgain = { gameId++ },
                     onMenu = { waves = null },
                 )

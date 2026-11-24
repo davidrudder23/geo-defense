@@ -32,8 +32,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import org.noses.towerdefense.audio.SfxPlayer
 import org.noses.towerdefense.game.GameEngine
 import org.noses.towerdefense.game.Phase
+import org.noses.towerdefense.game.SoundCue
 import org.noses.towerdefense.game.Tower
 import org.noses.towerdefense.game.TowerKind
 
@@ -82,8 +84,9 @@ private fun GameEngine.hudState() = HudState(
 @Composable
 fun GameScreen(
     totalWaves: Int,
-    musicOn: Boolean,
-    onToggleMusic: () -> Unit,
+    sfx: SfxPlayer,
+    soundOn: Boolean,
+    onToggleSound: () -> Unit,
     onPlayAgain: () -> Unit,
     onMenu: () -> Unit,
 ) {
@@ -94,6 +97,11 @@ fun GameScreen(
     var armed by remember { mutableStateOf<TowerKind?>(TowerKind.SQUARE) }
     var selected by remember { mutableStateOf<Tower?>(null) }
     var boardSize by remember { mutableStateOf(Size.Zero) }
+    var paused by remember { mutableStateOf(false) }
+    var speed by remember { mutableIntStateOf(1) }
+
+    // Reused every frame so draining sound cues allocates nothing.
+    val cues = remember { ArrayList<SoundCue>() }
 
     // The game loop. withFrameNanos suspends until the display is ready for the next frame and
     // hands back its clock, so the simulation advances by however much real time passed. That
@@ -103,9 +111,13 @@ fun GameScreen(
         var previous = 0L
         while (true) {
             withFrameNanos { now ->
-                if (previous != 0L) {
+                if (previous != 0L && !paused) {
                     val elapsed = (now - previous) / 1_000_000_000f
-                    engine.update(elapsed)
+                    // advance() splits this into fixed steps, so 5x plays the same game as 1x.
+                    engine.advance(elapsed * speed)
+                    engine.drainSounds(cues)
+                    sfx.playAll(cues)
+                    cues.clear()
                 }
                 previous = now
                 frame++
@@ -123,7 +135,15 @@ fun GameScreen(
             .fillMaxSize()
             .background(Palette.background),
     ) {
-        TopBar(hud, musicOn, onToggleMusic)
+        TopBar(
+            hud = hud,
+            paused = paused,
+            speed = speed,
+            soundOn = soundOn,
+            onTogglePause = { paused = !paused },
+            onCycleSpeed = { speed = nextSpeed(speed) },
+            onToggleSound = onToggleSound,
+        )
 
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             Canvas(
@@ -162,6 +182,10 @@ fun GameScreen(
                 )
             }
 
+            if (paused && !hud.finished) {
+                PausedBanner()
+            }
+
             if (hud.finished) {
                 GameOverPanel(hud, onPlayAgain, onMenu)
             }
@@ -182,6 +206,33 @@ fun GameScreen(
         } else {
             TowerPalette(hud.money, armed) { armed = it }
         }
+    }
+}
+
+/** 1x, 2x, 5x, and back round to 1x. */
+fun nextSpeed(current: Int): Int = when (current) {
+    1 -> 2
+    2 -> 5
+    else -> 1
+}
+
+/** A quiet marker that the game is held, without hiding the board behind it. */
+@Composable
+private fun PausedBanner() {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Palette.background.copy(alpha = 0.45f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = "PAUSED",
+            color = Palette.text,
+            fontSize = 26.sp,
+            fontWeight = FontWeight.Bold,
+            fontFamily = FontFamily.Monospace,
+            letterSpacing = 6.sp,
+        )
     }
 }
 

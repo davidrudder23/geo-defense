@@ -71,14 +71,22 @@ fun EnemyGlyph(kind: EnemyKind, glyphSize: Dp, color: Color = colorOf(kind)) {
     }
 }
 
-/** Lives, cash and wave progress across the top of the screen. */
+/** Lives, cash and wave progress, plus the pause, speed and sound controls. */
 @Composable
-fun TopBar(hud: HudState, musicOn: Boolean, onToggleMusic: () -> Unit) {
+fun TopBar(
+    hud: HudState,
+    paused: Boolean,
+    speed: Int,
+    soundOn: Boolean,
+    onTogglePause: () -> Unit,
+    onCycleSpeed: () -> Unit,
+    onToggleSound: () -> Unit,
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .background(Palette.panel)
-            .padding(horizontal = 14.dp, vertical = 10.dp),
+            .padding(horizontal = 12.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Stat(
@@ -86,24 +94,88 @@ fun TopBar(hud: HudState, musicOn: Boolean, onToggleMusic: () -> Unit) {
             value = hud.lives.toString(),
             color = if (hud.lives <= 5) Palette.healthLow else Palette.health,
         )
-        Spacer(Modifier.width(18.dp))
+        Spacer(Modifier.width(14.dp))
         Stat("CASH", hud.money.toString(), Palette.text)
-        Spacer(Modifier.width(18.dp))
+        Spacer(Modifier.width(14.dp))
         Stat("WAVE", hud.wave.coerceAtLeast(1).toString() + "/" + hud.totalWaves, Palette.text)
         Spacer(Modifier.weight(1f))
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .background(Palette.background, RoundedCornerShape(10.dp))
-                .clickable(onClick = onToggleMusic),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = if (musicOn) "MUS" else "OFF",
-                color = if (musicOn) Palette.entry else Palette.dim,
-                fontSize = 9.sp,
-                fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Monospace,
+
+        // Pause, speed and sound, in the order you reach for them.
+        ControlButton(onClick = onTogglePause, active = paused) {
+            PauseGlyph(paused = paused, tint = if (paused) Palette.entry else Palette.text)
+        }
+        Spacer(Modifier.width(6.dp))
+        ControlButton(onClick = onCycleSpeed, active = speed > 1) {
+            ControlLabel(
+                text = speed.toString() + "x",
+                tint = if (speed > 1) Palette.entry else Palette.text,
+                size = 13.sp,
+            )
+        }
+        Spacer(Modifier.width(6.dp))
+        ControlButton(onClick = onToggleSound, active = false) {
+            ControlLabel(
+                text = if (soundOn) "SND" else "OFF",
+                tint = if (soundOn) Palette.entry else Palette.dim,
+                size = 9.sp,
+            )
+        }
+    }
+}
+
+/** The square slab the three top-bar controls share. */
+@Composable
+private fun ControlButton(
+    onClick: () -> Unit,
+    active: Boolean,
+    content: @Composable () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .size(38.dp)
+            .background(
+                if (active) Palette.entry.copy(alpha = 0.18f) else Palette.background,
+                RoundedCornerShape(10.dp),
+            )
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        content()
+    }
+}
+
+@Composable
+private fun ControlLabel(text: String, tint: Color, size: androidx.compose.ui.unit.TextUnit) {
+    Text(
+        text = text,
+        color = tint,
+        fontSize = size,
+        fontWeight = FontWeight.Bold,
+        fontFamily = FontFamily.Monospace,
+    )
+}
+
+/**
+ * Two bars while the game is running, a play triangle while it is paused: the button shows what
+ * pressing it will do.
+ */
+@Composable
+private fun PauseGlyph(paused: Boolean, tint: Color) {
+    Canvas(Modifier.size(16.dp)) {
+        if (paused) {
+            drawPath(trianglePath(Offset(size.width * 0.58f, size.height / 2f), size.minDimension * 0.52f), tint)
+        } else {
+            val barWidth = size.width * 0.28f
+            val gap = size.width * 0.16f
+            drawRect(
+                color = tint,
+                topLeft = Offset(size.width / 2f - gap / 2f - barWidth, 0f),
+                size = androidx.compose.ui.geometry.Size(barWidth, size.height),
+            )
+            drawRect(
+                color = tint,
+                topLeft = Offset(size.width / 2f + gap / 2f, 0f),
+                size = androidx.compose.ui.geometry.Size(barWidth, size.height),
             )
         }
     }

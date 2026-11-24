@@ -30,6 +30,8 @@ the difficulty curve is stretched to fit whatever length you choose, so the last
   green dot while a tower is armed.
 - **Upgrade or sell**: tap a tower you have already built. Three levels; selling refunds 60%.
 - **Start the wave** when you are ready. Nothing arrives until you say so.
+- **Pause, speed and sound** sit in the top right. Speed cycles 1x, 2x, 5x and back to 1x.
+  Building, upgrading and selling all still work while paused.
 - You lose a life for every enemy that walks off the end of the road, two for a square. Twenty
   lives, and the board is lost.
 
@@ -100,4 +102,25 @@ startup and then looped by the audio hardware, so it costs nothing while the gam
 To hear it without installing the game, run `./gradlew :app:test` and open the WAV it writes to
 `app/build/music.wav`.
 
-There are no sound effects — the brief asked for music only.
+## The sound effects
+
+`Sfx.kt` synthesizes those too — there are no audio files anywhere in the project. Each weapon
+has its own shot, and each enemy its own sound when it is destroyed:
+
+| Sound | Character |
+|---|---|
+| Bullet shot | Dry, clipped pop. Kept quiet, because it fires constantly. |
+| Blast launch / impact | Hollow thump, then the loudest thing on the board when the shell lands. |
+| Laser shot | Downward zap. |
+| Square destroyed | Low, dull crunch — it was the tank. |
+| Triangle destroyed | Light, high tick — it barely had any health. |
+| Circle destroyed | Metallic clank, built from deliberately inharmonic partials — it was the armoured one. |
+| Upgrade | Three rising bell notes, an A major triad. |
+
+The music is one pre-rendered buffer the hardware loops, which leaves no room to play anything
+alongside it, so the effects get their own streaming track and a small mixer thread
+([`SfxPlayer`](app/src/main/java/org/noses/towerdefense/audio/SfxPlayer.kt)). The engine never
+touches audio: it raises named `SoundCue` events and the UI plays them.
+
+`./gradlew :app:test` writes every effect to `app/build/sfx/*.wav` alongside the music, so they
+can be auditioned without installing anything.
