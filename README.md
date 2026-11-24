@@ -29,7 +29,11 @@ the difficulty curve is stretched to fit whatever length you choose, so the last
 - **Build**: tap a tower in the bottom bar to arm it, then tap any free cell. Free cells show a
   green dot while a tower is armed.
 - **Upgrade or sell**: tap a tower you have already built. Three levels; selling refunds 60%.
-- **Start the wave** when you are ready. Nothing arrives until you say so.
+- **Start the wave** when you are ready — or wait, and it starts itself. The button counts
+  down from 15 seconds, and pressing it early pays 2 gold per second you hand back.
+- **Build anywhere.** There is no road. Towers are walls, so where you put them decides the
+  route the enemies take. You cannot seal the exit off completely — that placement is refused.
+  The dashed line shows the way through as it currently stands.
 - **Pause, speed and sound** sit in the top right. Speed cycles 1x, 2x, 5x and back to 1x.
   Building, upgrading and selling all still work while paused.
 - You lose a life for every enemy that walks off the end of the road, two for a square. Twenty

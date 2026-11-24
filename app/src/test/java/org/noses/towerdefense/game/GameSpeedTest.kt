@@ -9,10 +9,8 @@ import kotlin.random.Random
 /** The speed button multiplies game time, so these pin down that it stays the same game. */
 class GameSpeedTest {
 
-    private fun straightMap(): GameMap = GameMap((0 until ROWS).map { Cell(0, it) })
-
     private fun engine() =
-        GameEngine(totalWaves = 10, map = straightMap(), random = Random(42))
+        GameEngine(totalWaves = 10, map = Fixtures.lane(), random = Random(42))
 
     @Test
     fun `the speed button cycles one two five and back to one`() {
@@ -33,10 +31,10 @@ class GameSpeedTest {
         repeat(24) { fast.advance(5f / 60f) }
 
         assertEquals(slow.enemies.size, fast.enemies.size)
-        val slowLead = slow.enemies.maxOf { it.distance }
-        val fastLead = fast.enemies.maxOf { it.distance }
+        val slowLead = slow.enemies.minOf { it.remainingSteps(slow.flow) }
+        val fastLead = fast.enemies.minOf { it.remainingSteps(fast.flow) }
         assertTrue(
-            "1x reached $slowLead but 5x reached $fastLead",
+            "1x had $slowLead left but 5x had $fastLead",
             abs(slowLead - fastLead) < 0.1f,
         )
     }
@@ -69,10 +67,10 @@ class GameSpeedTest {
         engine.startWave()
         engine.advance(1f / 60f)
         val enemy = engine.enemies.first()
-        val before = enemy.distance
+        val before = enemy.remainingSteps(engine.flow)
 
         engine.advance(0.2f)
-        val moved = enemy.distance - before
+        val moved = before - enemy.remainingSteps(engine.flow)
         // 0.2s at wave-one speed is a fraction of a cell, not a leap down the board.
         assertTrue("moved $moved cells", moved < 0.5f)
     }
@@ -83,11 +81,11 @@ class GameSpeedTest {
         engine.startWave()
         engine.advance(1f / 60f)
         val enemy = engine.enemies.first()
-        val before = enemy.distance
+        val before = enemy.remainingSteps(engine.flow)
 
         // Thirty seconds of stall at 5x would be 3000 steps if it were not capped.
         engine.advance(150f)
-        val moved = enemy.distance - before
+        val moved = before - enemy.remainingSteps(engine.flow)
         val ceiling = MAX_STEP_SECONDS * MAX_STEPS_PER_FRAME * enemy.stats.speed * 1.5f
         assertTrue("moved $moved cells, ceiling $ceiling", moved <= ceiling)
     }

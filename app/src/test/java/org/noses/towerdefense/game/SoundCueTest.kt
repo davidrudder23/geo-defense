@@ -7,9 +7,7 @@ import kotlin.random.Random
 
 class SoundCueTest {
 
-    private fun straightMap(): GameMap = GameMap((0 until ROWS).map { Cell(0, it) })
-
-    private fun engine(waves: Int = 10, map: GameMap = straightMap()) =
+    private fun engine(waves: Int = 10, map: GameMap = Fixtures.lane()) =
         GameEngine(totalWaves = waves, map = map, random = Random(42))
 
     private fun GameEngine.run(seconds: Float, step: Float = 1f / 60f) {
@@ -104,8 +102,8 @@ class SoundCueTest {
     @Test
     fun `upgrading reports a sound`() {
         val engine = engine()
-        engine.build(TowerKind.SQUARE, Cell(3, 3))
-        val tower = engine.towerAt(Cell(3, 3))!!
+        engine.build(TowerKind.SQUARE, Cell(1, 3))
+        val tower = engine.towerAt(Cell(1, 3))!!
 
         val before = ArrayList<SoundCue>()
         engine.drainSounds(before)
@@ -120,8 +118,8 @@ class SoundCueTest {
     @Test
     fun `a refused upgrade is silent`() {
         val engine = engine()
-        engine.build(TowerKind.SQUARE, Cell(3, 3))
-        val tower = engine.towerAt(Cell(3, 3))!!
+        engine.build(TowerKind.SQUARE, Cell(1, 3))
+        val tower = engine.towerAt(Cell(1, 3))!!
         // Max it out, then try once more.
         while (tower.canUpgrade) engine.upgrade(tower)
 

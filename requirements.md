@@ -21,6 +21,29 @@ I want to build a tower defense game.  The ultimate goal is to learn to make the
 	- Plus-sign - Lasers that go through all the units until the end of the board
 * Add music.  Write the music yourself. It should be early-techno style, very simple
 
+## Maps and movement
+
+There is no pre-set path. The board is an open field, and enemies work out their own way across
+it from the entry to the exit.
+
+* A weapon can be placed anywhere on the open field
+* Maps are populated with fixed blockers that enemies cannot move through
+* Enemies cannot move through weapons either, so placing a weapon changes the path
+* A placement that would leave no way at all from the entry to the exit is refused, and so is
+  one that would strand an enemy already on the board. The board can be bent, not sealed.
+* A weapon cannot be dropped onto a cell an enemy is standing on or walking into
+* The route the enemies are currently taking is drawn on the board, so the effect of building
+  can be seen while building
+
+## The wave timer
+
+* The start-wave button carries a 15 second countdown, shown as a number and as a bar draining
+  across the button
+* When it reaches zero the next wave starts on its own
+* Pressing the button before then pays 2 gold for every second still on the clock, so going
+  early is a trade: less time to build, more money to build with
+* A wave that arrives on its own pays nothing
+
 ## Sound effects
 
 * Every weapon has its own shot sound, so you can tell what is firing without looking
@@ -32,6 +55,7 @@ I want to build a tower defense game.  The ultimate goal is to learn to make the
 	- Triangle - a light, high tick, because it is the flimsy one
 	- Circle - a metallic clank, because it is the armoured one
 * Upgrading a weapon plays a rising three-note chime
+* Taking the early-start bonus plays a short run of bright blips, like coins landing
 * Like the music, every effect is synthesized in code. There are no audio files in the project.
 
 ## Game controls

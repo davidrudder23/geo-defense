@@ -31,6 +31,9 @@ enum class SoundCue {
 
     /** A tower was upgraded. */
     UPGRADE,
+
+    /** Paid for starting a wave before the build clock ran out. */
+    RUSH_BONUS,
 }
 
 /** The sound a given enemy makes when it is destroyed. */

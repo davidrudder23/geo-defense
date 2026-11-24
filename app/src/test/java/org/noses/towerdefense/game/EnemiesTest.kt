@@ -7,7 +7,9 @@ import org.junit.Test
 
 class EnemiesTest {
 
-    private fun straightMap() = GameMap((0 until ROWS).map { Cell(0, it) })
+    private fun lane() = Fixtures.lane()
+
+    private fun flowFor(map: GameMap) = flowFieldTo(map.exit) { map.isOpen(it) }
 
     @Test
     fun `the three kinds play differently`() {
@@ -72,40 +74,90 @@ class EnemiesTest {
     }
 
     @Test
-    fun `an enemy walks the road and reports arriving at the end`() {
-        val map = straightMap()
-        val enemy = Enemy(SQUARE_ENEMY).apply { placeOn(map) }
+    fun `an enemy finds its way to the exit and says so`() {
+        val map = lane()
+        val flow = flowFor(map)
+        val enemy = Enemy(SQUARE_ENEMY).apply { spawnAt(map.entry, flow) }
         assertEquals(map.entry.center(), enemy.position)
 
         var arrived = false
         var guard = 0
         while (!arrived && guard < 10_000) {
-            arrived = enemy.advance(1f / 60f, map)
+            arrived = enemy.advance(1f / 60f, map.exit, flow)
             guard++
         }
-        assertTrue("never reached the end", arrived)
-        assertTrue(enemy.distance >= map.pathLength)
+        assertTrue("never reached the exit", arrived)
+        assertEquals(map.exit.center(), enemy.position)
     }
 
     @Test
     fun `a faster enemy gets further in the same time`() {
-        val map = straightMap()
-        val square = Enemy(SQUARE_ENEMY).apply { placeOn(map) }
-        val triangle = Enemy(TRIANGLE_ENEMY).apply { placeOn(map) }
+        val map = lane()
+        val flow = flowFor(map)
+        val square = Enemy(SQUARE_ENEMY).apply { spawnAt(map.entry, flow) }
+        val triangle = Enemy(TRIANGLE_ENEMY).apply { spawnAt(map.entry, flow) }
         repeat(60) {
-            square.advance(1f / 60f, map)
-            triangle.advance(1f / 60f, map)
+            square.advance(1f / 60f, map.exit, flow)
+            triangle.advance(1f / 60f, map.exit, flow)
         }
-        assertTrue(triangle.distance > square.distance)
+        assertTrue(triangle.remainingSteps(flow) < square.remainingSteps(flow))
     }
 
     @Test
     fun `an enemy faces the way it is walking`() {
-        val map = straightMap()
-        val enemy = Enemy(SQUARE_ENEMY).apply { placeOn(map) }
-        enemy.advance(0.5f, map)
+        val map = lane()
+        val flow = flowFor(map)
+        val enemy = Enemy(SQUARE_ENEMY).apply { spawnAt(map.entry, flow) }
+        enemy.advance(0.5f, map.exit, flow)
         // Walking straight down the board is +y, which is a quarter turn in radians.
         assertEquals(Math.PI.toFloat() / 2f, enemy.heading, 0.05f)
+    }
+
+    @Test
+    fun `an enemy re-routes when the maze changes under it`() {
+        // Straight down column 3 to begin with.
+        val map = Fixtures.openField()
+        val direct = flowFieldTo(map.exit) { map.isOpen(it) }
+        val enemy = Enemy(SQUARE_ENEMY).apply { spawnAt(map.entry, direct) }
+        repeat(120) { enemy.advance(1f / 60f, map.exit, direct) }
+        val wentStraight = enemy.cell
+
+        // Now wall off the column ahead of it and hand it the new routing.
+        val wall = (0..4).map { Cell(it, wentStraight.row + 2) }.toSet()
+        val detour = flowFieldTo(map.exit) { map.isOpen(it) && it !in wall }
+        repeat(240) { enemy.advance(1f / 60f, map.exit, detour) }
+
+        assertTrue("walked into the wall", enemy.cell !in wall)
+        assertTrue("did not go round", enemy.cell.col > 0)
+        assertTrue(!enemy.stranded)
+    }
+
+    @Test
+    fun `an enemy with nowhere to go stands still rather than wandering off`() {
+        val map = Fixtures.openField()
+        val flow = flowFor(map)
+        val enemy = Enemy(SQUARE_ENEMY).apply { spawnAt(map.entry, flow) }
+
+        // A field where nothing can reach the exit at all.
+        val sealed = flowFieldTo(map.exit) { false }
+        repeat(120) { enemy.advance(1f / 60f, map.exit, sealed) }
+
+        assertTrue(enemy.stranded)
+        assertTrue(enemy.position.x in 0f..COLUMNS.toFloat())
+        assertTrue(enemy.position.y in 0f..ROWS.toFloat())
+    }
+
+    @Test
+    fun `a fast enemy still turns corners instead of cutting through walls`() {
+        // One frame at 5x covers several cells; the movement budget has to be spent cell by
+        // cell or a triangle would cut the corner and pass through a blocker.
+        val map = Fixtures.serpentine()
+        val flow = flowFor(map)
+        val enemy = Enemy(TRIANGLE_ENEMY, speedScale = 5f).apply { spawnAt(map.entry, flow) }
+        repeat(200) {
+            enemy.advance(1f / 60f, map.exit, flow)
+            assertTrue("walked through a blocker at ${enemy.cell}", enemy.cell !in map.blockers)
+        }
     }
 
     private fun assertEquals(expected: Int, actual: Int, tolerance: Int) {

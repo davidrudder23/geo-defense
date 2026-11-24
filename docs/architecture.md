@@ -94,32 +94,93 @@ only re-renders when a number actually changes, and it is impossible for it to g
 The general rule: **anything Compose has to react to must be Compose state.** Reading a plain
 object during composition reads it exactly once.
 
-## Generating maps
+## Maps, and why there is no road
 
-The road is built one row at a time, always moving down:
+The board is an open field with fixed blockers scattered through it. There is no road, and no
+fixed path: enemies work out their own way from the entry to the exit, and because **towers are
+walls too**, where the player builds decides where the enemies walk. That is the whole game.
+
+Generation places short walls rather than loose cells, so the field has something to steer
+around instead of a scattering of dots. Each wall is kept only if the exit is still reachable
+afterwards:
 
 ```
-pick a starting column
-for each row:
-    maybe run sideways a few cells
-    step down one row
+place a short wall
+if the exit can no longer be reached from the entry:
+    take it back again
 ```
 
-Because the row only ever increases, and each row is crossed in a single direction, the road
-**cannot** cross or touch itself. That is worth more than it sounds: it means generation always
-succeeds on the first try. No retry loop, no "give up after 100 attempts", no possibility of
-shipping a map with no route from top to bottom. The invariant does the work that validation
-would otherwise have to.
+Putting a wall back is cheaper than being clever about which walls are safe, and it makes the
+invariant unconditional: a generated map always has a way through. `there is always a way from
+the entry to the exit` checks three hundred of them.
 
-One extra rule earns its keep: a row that runs sideways is always followed by a row that only
-steps down. Without it two sideways runs can land on neighbouring rows, and the road thickens
-into a 2×2 block that reads as a rectangle rather than a lane you can follow. The first build had
-exactly this problem and it looked like a rendering bug. `the road is never two cells thick`
-guards it now.
+## Routing
 
-Enemies walk the road by distance rather than by cell — `positionAt(distance)` interpolates
-between the two cells either side — so movement is smooth and independent of frame rate, and
-"which enemy is furthest along" is just a number comparison. Every tower targets using it.
+Routing is a **flow field**, in `Pathing.kt`. One breadth-first sweep outward from the exit
+records how many steps every cell on the board is from it. An enemy then moves by looking at its
+neighbours and walking to whichever has a smaller number.
+
+This is worth understanding, because the obvious design — path each enemy individually — is
+both slower and worse:
+
+- **One sweep routes everybody.** Twenty enemies cost the same as one.
+- **Re-routing is free.** When a tower goes up the field is rebuilt once, and every enemy on the
+  board, including ones mid-stride, is re-routed by the next question it asks. No per-enemy
+  bookkeeping, no invalidation logic.
+- **Targeting falls out of it.** "Which enemy is closest to getting through" is just the smallest
+  distance-to-exit, the same number the routing already computed.
+
+It is breadth-first search rather than Dijkstra's algorithm because every move costs exactly one
+step, and with uniform edge costs a FIFO queue pops cells in the same order a priority queue
+would. Dijkstra would give identical answers for more work. If cells ever get *varying* movement
+costs — mud that slows things down — that stops being true, and the `ArrayDeque` has to become a
+priority queue. That is the seam to pull on.
+
+Movement is deliberately spent cell by cell rather than in one jump per frame:
+
+```kotlin
+while (budget > 0f) {
+    walk towards the middle of the target cell
+    on arrival, ask the flow field for the next one
+}
+```
+
+At 5x speed a triangle covers several cells in a frame. Without the loop it would cut corners,
+and a corner here is a blocker.
+
+## The rule that makes it a game and not a puzzle
+
+Since towers are walls, nothing stops a player fencing the exit off and winning by default. So
+every placement is checked first: build the flow field as it *would* be with something on that
+cell, and refuse it if the entry can no longer reach the exit.
+
+The same check also covers every enemy already walking, using the cell it is heading into.
+Otherwise a tower could strand one somewhere it can neither be killed nor leak from, and the
+wave would never end.
+
+This is why the board only shows build dots on cells that are actually legal while a tower is
+armed — the check runs per cell, and it is cheap enough to run for all of them, because the
+board is 9x16 and a full sweep is 144 cells.
+
+Two things that look like edge cases and are not:
+
+- The cell just past the only gap in a wall is load-bearing even though the gap itself is still
+  open. The reachability check sees this; a "is this cell a chokepoint" heuristic would not.
+- A cell an enemy is standing on, or walking into, is refused outright. Dropping a wall on top
+  of something is not a routing question.
+
+## The wave timer
+
+Between waves a 15 second clock runs, after which the next wave arrives on its own. Pressing the
+button early pays 2 gold per second left on it.
+
+It is counted in **game** time, not wall-clock time, which gets two behaviours for free: it stops
+while the game is paused, and it runs down faster at 2x and 5x. It also means a game no longer
+waits forever on a player who never presses anything.
+
+The bonus is computed from the number *rounded up*, which is the same number the button is
+showing. Whatever it says when it is pressed is what gets paid; a bonus that disagreed with the
+display by one would read as a bug.
 
 ## Difficulty, and what "no easy or hard" means
 
@@ -198,12 +259,11 @@ it is easy to assert something the scenario cannot produce.
 Things this deliberately does not do, roughly in the order they would be worth adding:
 
 - **Saving.** Nothing persists. A process death loses the game in progress.
-- **Sound effects.** There is no mixer — the music is one pre-rendered buffer. Effects need a
-  second `AudioTrack` or a `SoundPool`.
-- **Enemy variety beyond the three.** Statuses (slow, burn), flying units that skip the road, and
-  healers all want hooks the engine does not currently have.
-- **Pathfinding.** The road is fixed, so there is no routing. Maze-style tower defense, where
-  towers block and enemies re-route, is a genuinely different engine: it needs A* and a rule that
-  stops you walling the exit off completely.
+- **Enemy variety beyond the three.** Statuses (slow, burn) and healers all want hooks the
+  engine does not currently have.
+- **Varying movement costs.** Routing assumes every step costs the same, which is what lets it
+  use breadth-first search. Terrain that slows enemies down would need a priority queue.
+- **Enemies that ignore the maze.** Flying units that go straight over blockers would need to
+  skip the flow field entirely, which is a clean addition but a second movement model.
 - **Performance headroom.** Lists are iterated linearly every frame. Fine for the few dozen
   entities here; a few thousand would want spatial partitioning for target selection.

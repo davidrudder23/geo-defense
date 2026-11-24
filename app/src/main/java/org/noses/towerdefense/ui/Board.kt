@@ -69,7 +69,9 @@ fun DrawScope.drawGame(
     redrawKey: Int,
 ) {
     drawGround(engine, projection, armed != null)
-    drawRoad(engine, projection)
+    drawBlockers(engine, projection)
+    drawRoute(engine, projection)
+    drawGates(engine, projection)
     if (selected != null) drawRange(selected, projection)
     engine.towers.forEach { drawTower(it, projection, it == selected) }
     engine.enemies.forEach { drawEnemy(it, projection) }
@@ -90,8 +92,11 @@ private fun DrawScope.drawGround(engine: GameEngine, projection: Projection, arm
     for (row in 0 until ROWS) {
         for (col in 0 until COLUMNS) {
             if (!engine.map.isBuildable(col, row)) continue
-            val free = engine.towerAt(Cell(col, row)) == null
-            val highlight = armed && free
+            val here = Cell(col, row)
+            val free = engine.towerAt(here) == null
+            // While a tower is armed, only show a dot where it could actually go: a cell that
+            // would seal the exit off is not a legal place to build.
+            val highlight = armed && free && engine.leavesAWayThrough(here)
             drawCircle(
                 color = if (highlight) Palette.entry.copy(alpha = 0.5f) else Palette.gridDot,
                 radius = if (highlight) cell * 0.1f else cell * 0.07f,
@@ -101,42 +106,63 @@ private fun DrawScope.drawGround(engine: GameEngine, projection: Projection, arm
     }
 }
 
-private fun DrawScope.drawRoad(engine: GameEngine, projection: Projection) {
+/**
+ * The fixed blockers, as solid slabs. These are the walls the board starts with; the player adds
+ * more by building.
+ */
+private fun DrawScope.drawBlockers(engine: GameEngine, projection: Projection) {
     val cell = projection.cellSize
-    // Filling whole cells makes the road join up into one continuous band.
-    engine.map.path.forEach { roadCell ->
+    engine.map.blockers.forEach { blocker ->
+        val topLeft = Offset(
+            projection.originX + blocker.col * cell + cell * 0.06f,
+            projection.originY + blocker.row * cell + cell * 0.06f,
+        )
+        val size = Size(cell * 0.88f, cell * 0.88f)
+        drawRect(color = Palette.blocker, topLeft = topLeft, size = size)
         drawRect(
-            color = Palette.road,
-            topLeft = Offset(
-                projection.originX + roadCell.col * cell,
-                projection.originY + roadCell.row * cell,
-            ),
-            size = Size(cell, cell),
+            color = Palette.blockerEdge,
+            topLeft = topLeft,
+            size = size,
+            style = Stroke(width = cell * 0.06f),
         )
     }
-    // A dashed line down the middle of the road, which also shows the direction of travel.
-    val centreLine = androidx.compose.ui.graphics.Path().apply {
-        engine.map.path.forEachIndexed { index, roadCell ->
-            val at = projection.toOffset(roadCell)
-            if (index == 0) moveTo(at.x, at.y) else lineTo(at.x, at.y)
-        }
+}
+
+/**
+ * The way the enemies are currently taking, as a dashed line.
+ *
+ * Without this the player is guessing. Because every tower is a wall, the whole game is about
+ * bending this line, so it has to be visible while you build.
+ */
+private fun DrawScope.drawRoute(engine: GameEngine, projection: Projection) {
+    val route = engine.route
+    if (route.size < 2) return
+    val cell = projection.cellSize
+    val line = androidx.compose.ui.graphics.Path()
+    route.forEachIndexed { index, step ->
+        val at = projection.toOffset(step)
+        if (index == 0) line.moveTo(at.x, at.y) else line.lineTo(at.x, at.y)
     }
     drawPath(
-        path = centreLine,
-        color = Palette.roadEdge,
+        path = line,
+        color = Palette.route,
         style = Stroke(
-            width = cell * 0.08f,
+            width = cell * 0.09f,
             cap = StrokeCap.Round,
-            pathEffect = PathEffect.dashPathEffect(floatArrayOf(cell * 0.22f, cell * 0.22f)),
+            pathEffect = PathEffect.dashPathEffect(floatArrayOf(cell * 0.2f, cell * 0.2f)),
         ),
     )
-    // Where they come in, and where they get out.
+}
+
+/** Where they come in, and where they get out. */
+private fun DrawScope.drawGates(engine: GameEngine, projection: Projection) {
+    val cell = projection.cellSize
     drawPath(
-        path = trianglePath(projection.toOffset(engine.map.entry), cell * 0.3f, Math.PI.toFloat() / 2f),
+        path = trianglePath(projection.toOffset(engine.map.entry), cell * 0.32f, Math.PI.toFloat() / 2f),
         color = Palette.entry,
     )
     drawPath(
-        path = hexagonPath(projection.toOffset(engine.map.exit), cell * 0.3f),
+        path = hexagonPath(projection.toOffset(engine.map.exit), cell * 0.32f),
         color = Palette.exit,
         style = Stroke(width = cell * 0.1f),
     )

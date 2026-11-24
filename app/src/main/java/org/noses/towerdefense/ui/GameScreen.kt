@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.noses.towerdefense.audio.SfxPlayer
 import org.noses.towerdefense.game.GameEngine
+import org.noses.towerdefense.game.READY_SECONDS
 import org.noses.towerdefense.game.Phase
 import org.noses.towerdefense.game.SoundCue
 import org.noses.towerdefense.game.Tower
@@ -53,6 +54,12 @@ data class HudState(
     val phase: Phase,
     val killed: Int,
     val leaked: Int,
+    /** Whole seconds left to build before the next wave arrives on its own. */
+    val readySeconds: Int,
+    /** The same clock as a 0..1 fraction, for the bar inside the button. */
+    val readyFraction: Float,
+    /** Gold that starting the wave right now would pay. */
+    val rushBonus: Int,
 ) {
     val finished: Boolean get() = phase == Phase.WON || phase == Phase.LOST
 }
@@ -65,6 +72,9 @@ private fun GameEngine.hudState() = HudState(
     phase = phase,
     killed = enemiesKilled,
     leaked = enemiesLeaked,
+    readySeconds = readySecondsLeft,
+    readyFraction = if (phase == Phase.READY) readySeconds / READY_SECONDS else 0f,
+    rushBonus = rushBonus,
 )
 
 /**
@@ -171,9 +181,11 @@ fun GameScreen(
             }
 
             if (hud.phase == Phase.READY) {
-                GameButton(
-                    label = "START WAVE " + (hud.wave + 1),
-                    color = Palette.entry,
+                StartWaveButton(
+                    wave = hud.wave + 1,
+                    secondsLeft = hud.readySeconds,
+                    fraction = hud.readyFraction,
+                    bonus = hud.rushBonus,
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .padding(16.dp)

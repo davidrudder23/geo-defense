@@ -11,8 +11,9 @@ object Palette {
     val panelEdge = Color(0xFF232a40)
 
     val board = Color(0xFF11141F)
-    val road = Color(0xFF272E42)
-    val roadEdge = Color(0xFF39425D)
+    val blocker = Color(0xFF2B3248)
+    val blockerEdge = Color(0xFF3D4766)
+    val route = Color(0xFF39425D)
     val gridDot = Color(0xFF1E2434)
 
     val entry = Color(0xFF2DE2A8)

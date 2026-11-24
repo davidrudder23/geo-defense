@@ -34,6 +34,7 @@ object Sfx {
         SoundCue.TRIANGLE_DOWN -> triangleDown()
         SoundCue.CIRCLE_DOWN -> circleDown()
         SoundCue.UPGRADE -> upgrade()
+        SoundCue.RUSH_BONUS -> rushBonus()
     }
 
     // --- the weapons ----------------------------------------------------------------------
@@ -191,6 +192,29 @@ object Sfx {
             }
         }
         return finish(mix, 0.52f)
+    }
+
+    /**
+     * Cash paid for going early: a quick run of bright blips, like coins landing.
+     *
+     * Deliberately shorter and thinner than the upgrade chime. It can fire at the same moment a
+     * wave starts, so it has to sit out of the way rather than compete.
+     */
+    private fun rushBonus(): ShortArray {
+        val mix = buffer(0.34f)
+        val notes = floatArrayOf(1318.51f, 1760.00f, 2093.00f, 2637.02f)
+        for (n in notes.indices) {
+            val start = (n * 0.045f * SAMPLE_RATE).toInt()
+            var i = start
+            while (i < mix.size) {
+                val t = (i - start).toFloat() / SAMPLE_RATE
+                val f = notes[n]
+                val value = sin(TAU * f * t) + 0.22f * sin(TAU * f * 2f * t)
+                mix[i] += value * exp(-t * 26f) * 0.38f
+                i++
+            }
+        }
+        return finish(mix, 0.44f)
     }
 
     // --- plumbing -------------------------------------------------------------------------

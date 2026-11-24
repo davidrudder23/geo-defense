@@ -4,7 +4,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import kotlin.math.abs
 import kotlin.random.Random
 
 class MapGeneratorTest {
@@ -14,19 +13,21 @@ class MapGeneratorTest {
         (0 until count).map { seed -> generateMap(Random(seed.toLong())) }
 
     @Test
-    fun `road starts at the top and ends at the bottom`() {
+    fun `the entry is on the top row and the exit on the bottom`() {
         maps().forEach { map ->
             assertEquals(0, map.entry.row)
             assertEquals(ROWS - 1, map.exit.row)
+            assertTrue(map.entry.col in 0 until COLUMNS)
+            assertTrue(map.exit.col in 0 until COLUMNS)
         }
     }
 
     @Test
-    fun `road stays on the board`() {
+    fun `blockers stay on the board`() {
         maps().forEach { map ->
-            map.path.forEach { cell ->
+            map.blockers.forEach { cell ->
                 assertTrue(
-                    "cell $cell is off the board",
+                    "blocker $cell is off the board",
                     cell.col in 0 until COLUMNS && cell.row in 0 until ROWS,
                 )
             }
@@ -34,53 +35,37 @@ class MapGeneratorTest {
     }
 
     @Test
-    fun `each step of the road touches the last`() {
+    fun `the entry and exit are never blocked`() {
         maps().forEach { map ->
-            map.path.zipWithNext { from, to ->
-                val steps = abs(to.col - from.col) + abs(to.row - from.row)
-                assertEquals("$from to $to is not a single step", 1, steps)
-            }
+            assertTrue(map.entry !in map.blockers)
+            assertTrue(map.exit !in map.blockers)
         }
     }
 
     @Test
-    fun `road never crosses itself`() {
+    fun `there is always a way from the entry to the exit`() {
+        // This is the one invariant the generator must never break: an unsolvable map is an
+        // unplayable game.
         maps().forEach { map ->
-            assertEquals(map.path.size, map.path.toSet().size)
+            val flow = flowFieldTo(map.exit) { map.isOpen(it) }
+            assertTrue("no route on this map", flow.canReachExit(map.entry))
         }
     }
 
     @Test
-    fun `the road is never two cells thick`() {
-        // A 2x2 block of road means two sideways runs landed on neighbouring rows, which reads
-        // as a rectangle rather than a lane you can follow.
+    fun `maps have enough blockers to be worth navigating`() {
         maps().forEach { map ->
-            for (row in 0 until ROWS - 1) {
-                for (col in 0 until COLUMNS - 1) {
-                    val block = map.isRoad(col, row) && map.isRoad(col + 1, row) &&
-                        map.isRoad(col, row + 1) && map.isRoad(col + 1, row + 1)
-                    assertTrue("2x2 block of road at ($col, $row)", !block)
-                }
-            }
+            assertTrue("only ${map.blockers.size} blockers", map.blockers.size >= 8)
         }
     }
 
     @Test
-    fun `the road has corners in it`() {
-        // A road straight down the board would be a dull map.
-        val turns = maps(50).map { map ->
-            map.path.windowed(3).count { (a, _, c) -> a.col != c.col && a.row != c.row }
-        }
-        assertTrue("some maps had no corners", turns.all { it >= 2 })
-    }
-
-    @Test
-    fun `there is room left to build`() {
+    fun `maps leave plenty of room to build`() {
         maps().forEach { map ->
             val buildable = (0 until ROWS).sumOf { row ->
                 (0 until COLUMNS).count { col -> map.isBuildable(col, row) }
             }
-            assertTrue("only $buildable buildable cells", buildable > 60)
+            assertTrue("only $buildable buildable cells", buildable > 80)
         }
     }
 
@@ -88,24 +73,31 @@ class MapGeneratorTest {
     fun `maps differ from each other`() {
         val first = generateMap(Random(1))
         val second = generateMap(Random(2))
-        assertNotEquals(first.path, second.path)
+        assertNotEquals(first.blockers, second.blockers)
     }
 
     @Test
-    fun `walking the path moves from entry to exit`() {
-        val map = generateMap(Random(7))
-        assertEquals(map.entry.center(), map.positionAt(0f))
-        assertEquals(map.exit.center(), map.positionAt(map.pathLength.toFloat()))
-        // Clamped at both ends rather than running off.
-        assertEquals(map.entry.center(), map.positionAt(-5f))
-        assertEquals(map.exit.center(), map.positionAt(map.pathLength + 10f))
+    fun `the route is not simply a straight line down the board`() {
+        // If the blockers never got in the way the maps would be pointless.
+        val wandering = maps(60).count { map ->
+            val route = flowFieldTo(map.exit) { map.isOpen(it) }.routeFrom(map.entry)
+            route.size > ROWS
+        }
+        assertTrue("only $wandering of 60 maps made the route bend", wandering > 30)
     }
 
     @Test
-    fun `position halfway along a step is halfway between the cells`() {
-        val map = GameMap(listOf(Cell(0, 0), Cell(0, 1)))
-        val middle = map.positionAt(0.5f)
-        assertEquals(0.5f, middle.x, 1e-4f)
-        assertEquals(1.0f, middle.y, 1e-4f)
+    fun `a cell is buildable only when it is open and not a gate`() {
+        val map = GameMap(
+            entry = Cell(0, 0),
+            exit = Cell(0, ROWS - 1),
+            blockers = setOf(Cell(4, 4)),
+        )
+        assertTrue(map.isBuildable(3, 3))
+        assertTrue("a blocker is not buildable", !map.isBuildable(4, 4))
+        assertTrue("the entry is not buildable", !map.isBuildable(0, 0))
+        assertTrue("the exit is not buildable", !map.isBuildable(0, ROWS - 1))
+        assertTrue("off the board is not buildable", !map.isBuildable(-1, 3))
+        assertTrue("off the board is not buildable", !map.isBuildable(3, ROWS + 2))
     }
 }

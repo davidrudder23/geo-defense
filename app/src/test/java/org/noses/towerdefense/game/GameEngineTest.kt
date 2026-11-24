@@ -10,25 +10,9 @@ import kotlin.random.Random
 
 class GameEngineTest {
 
-    /** A straight road down column 0, so tests can place towers at known distances. */
-    private fun straightMap(): GameMap = GameMap((0 until ROWS).map { Cell(0, it) })
+    private fun lane() = Fixtures.lane()
 
-    /**
-     * A road that snakes across columns 0..6, leaving columns 7 and 8 free to build on. The long
-     * road gives a defence time to work, which is what makes a game winnable.
-     */
-    private fun serpentineMap(): GameMap {
-        val path = ArrayList<Cell>()
-        for (row in 0 until ROWS) {
-            // Each row is walked the opposite way to the last, so the end of one row sits
-            // directly above the start of the next and the whole thing joins up.
-            val columns = if (row % 2 == 0) (0..6) else (6 downTo 0)
-            columns.forEach { col -> path.add(Cell(col, row)) }
-        }
-        return GameMap(path)
-    }
-
-    private fun engine(waves: Int = 10, map: GameMap = straightMap()) =
+    private fun engine(waves: Int = 10, map: GameMap = Fixtures.lane()) =
         GameEngine(totalWaves = waves, map = map, random = Random(42))
 
     /** Steps the simulation for [seconds] in frame-sized slices. */
@@ -37,6 +21,15 @@ class GameEngineTest {
         while (elapsed < seconds) {
             update(step)
             elapsed += step
+        }
+    }
+
+    /** Runs until the board is ready to build again, or gives up after [maxSeconds]. */
+    private fun GameEngine.runUntilReady(maxSeconds: Float = 400f) {
+        var elapsed = 0f
+        while (elapsed < maxSeconds && phase == Phase.RUNNING) {
+            update(1f / 60f)
+            elapsed += 1f / 60f
         }
     }
 
@@ -50,6 +43,32 @@ class GameEngineTest {
             if (phase == Phase.READY) startWave()
             update(step)
             elapsed += step
+        }
+    }
+
+    /** Cells beside the serpentine route, where a defence can stand without blocking it. */
+    private fun defensiveSpots(): List<Cell> =
+        listOf(0, 3, 6, 9, 12).flatMap { row -> (0 until COLUMNS).map { Cell(it, row) } }
+
+    /**
+     * Plays a whole game the way a player would: spends the money it has between waves, then
+     * starts the next wave. Enough to tell whether a game can actually be won.
+     */
+    private fun GameEngine.autoPlay(kind: TowerKind = TowerKind.SQUARE, maxSeconds: Float = 2000f) {
+        val spots = ArrayDeque(defensiveSpots())
+        fun spend() {
+            val walk = spots.iterator()
+            while (walk.hasNext()) {
+                if (money < statsFor(kind).cost) break
+                if (build(kind, walk.next())) walk.remove()
+            }
+        }
+        var elapsed = 0f
+        spend()
+        while (elapsed < maxSeconds && !finished) {
+            if (phase == Phase.READY) { spend(); startWave() }
+            update(1f / 60f)
+            elapsed += 1f / 60f
         }
     }
 
@@ -83,7 +102,7 @@ class GameEngineTest {
     @Test
     fun `building costs money and occupies the cell`() {
         val engine = engine()
-        val cell = Cell(4, 4)
+        val cell = Cell(1, 4)
         assertTrue(engine.build(TowerKind.SQUARE, cell))
         assertEquals(STARTING_MONEY - SQUARE_TOWER.cost, engine.money)
         assertNotNull(engine.towerAt(cell))
@@ -94,22 +113,24 @@ class GameEngineTest {
     @Test
     fun `towers cannot be built on the road or off the board`() {
         val engine = engine()
-        assertFalse(engine.build(TowerKind.SQUARE, Cell(0, 3)))
-        assertFalse(engine.build(TowerKind.SQUARE, Cell(-1, 3)))
-        assertFalse(engine.build(TowerKind.SQUARE, Cell(2, ROWS + 4)))
+        assertFalse("built on a blocker", engine.build(TowerKind.SQUARE, Cell(4, 3)))
+        assertFalse("built off the board", engine.build(TowerKind.SQUARE, Cell(-1, 3)))
+        assertFalse("built off the board", engine.build(TowerKind.SQUARE, Cell(2, ROWS + 4)))
+        assertFalse("built on the entry", engine.build(TowerKind.SQUARE, engine.map.entry))
+        assertFalse("built on the exit", engine.build(TowerKind.SQUARE, engine.map.exit))
     }
 
     @Test
     fun `a tower cannot be afforded without the money`() {
         val engine = engine()
         // Spend everything on bullet towers.
-        var col = 1
-        while (engine.money >= SQUARE_TOWER.cost) {
-            engine.build(TowerKind.SQUARE, Cell(col % COLUMNS + 1, col / COLUMNS + 1))
-            col++
+        var row = 1
+        while (engine.money >= SQUARE_TOWER.cost && row < ROWS - 1) {
+            engine.build(TowerKind.SQUARE, Cell(1, row))
+            row++
         }
         assertTrue(engine.money < SQUARE_TOWER.cost)
-        assertFalse(engine.build(TowerKind.SQUARE, Cell(5, 9)))
+        assertFalse(engine.build(TowerKind.SQUARE, Cell(1, row)))
     }
 
     @Test
@@ -144,24 +165,33 @@ class GameEngineTest {
 
     @Test
     fun `clearing the last wave wins the game`() {
-        // A long winding road and a line of towers covering it: a defence that should hold.
-        val engine = engine(waves = 1, map = serpentineMap())
-        listOf(Cell(7, 1), Cell(7, 4), Cell(7, 7), Cell(7, 10), Cell(7, 13), Cell(8, 8))
-            .forEach { assertTrue(engine.build(TowerKind.SQUARE, it)) }
-        engine.startWave()
-        engine.run(400f)
+        // A real ten-wave game, played by spending the takings between waves. This is as much a
+        // check that the game is winnable at all as it is a check of the winning transition.
+        val engine = engine(waves = 10, map = Fixtures.serpentine())
+        engine.autoPlay()
         assertEquals(Phase.WON, engine.phase)
+        assertEquals(10, engine.waveNumber)
         assertTrue(engine.lives > 0)
     }
 
     @Test
+    fun `a longer game can be won too`() {
+        val engine = engine(waves = 20, map = Fixtures.serpentine())
+        engine.autoPlay()
+        assertEquals(Phase.WON, engine.phase)
+        assertEquals(20, engine.waveNumber)
+    }
+
+    @Test
     fun `clearing a wave pays a bonus and returns to building`() {
-        val engine = engine(waves = 5, map = serpentineMap())
-        listOf(Cell(7, 1), Cell(7, 4), Cell(7, 7), Cell(7, 10), Cell(7, 13), Cell(8, 8))
-            .forEach { engine.build(TowerKind.SQUARE, it) }
+        val engine = engine(waves = 5, map = Fixtures.serpentine())
+        listOf(Cell(1, 0), Cell(4, 0), Cell(7, 0), Cell(2, 3), Cell(5, 3), Cell(7, 3))
+            .forEach { assertTrue("could not build at $it", engine.build(TowerKind.SQUARE, it)) }
         val moneyBefore = engine.money
         engine.startWave()
-        engine.run(400f)
+        // Stop as soon as the wave is cleared: the build clock would otherwise send in the next
+        // one while this test is still looking at the board.
+        engine.runUntilReady()
         assertEquals(Phase.READY, engine.phase)
         assertTrue(engine.enemies.isEmpty())
         // Kill rewards plus the clear bonus.
@@ -171,8 +201,8 @@ class GameEngineTest {
     @Test
     fun `upgrading spends money and strengthens the tower`() {
         val engine = engine()
-        engine.build(TowerKind.SQUARE, Cell(3, 3))
-        val tower = engine.towerAt(Cell(3, 3))!!
+        engine.build(TowerKind.SQUARE, Cell(1, 3))
+        val tower = engine.towerAt(Cell(1, 3))!!
         val damageBefore = tower.damage
         val intervalBefore = tower.fireInterval
         val cost = tower.upgradeCost!!
@@ -188,8 +218,8 @@ class GameEngineTest {
     @Test
     fun `a tower cannot be upgraded past the top level`() {
         val engine = engine()
-        engine.build(TowerKind.SQUARE, Cell(3, 3))
-        val tower = engine.towerAt(Cell(3, 3))!!
+        engine.build(TowerKind.SQUARE, Cell(1, 3))
+        val tower = engine.towerAt(Cell(1, 3))!!
         while (tower.canUpgrade) {
             assertTrue(engine.upgrade(tower))
         }
@@ -201,7 +231,7 @@ class GameEngineTest {
     @Test
     fun `selling refunds part of what was spent and frees the cell`() {
         val engine = engine()
-        val cell = Cell(3, 3)
+        val cell = Cell(1, 3)
         engine.build(TowerKind.SQUARE, cell)
         val tower = engine.towerAt(cell)!!
         val moneyBefore = engine.money
@@ -217,7 +247,7 @@ class GameEngineTest {
     fun `the laser hits every enemy in its line`() {
         // A road that stops short of the bottom, with the laser directly below the end of it, so
         // the beam runs straight up the road and through everything walking down it.
-        val shortRoad = GameMap((0..10).map { Cell(3, it) })
+        val shortRoad = Fixtures.stub()
         val engine = engine(map = shortRoad)
         assertTrue(engine.build(TowerKind.PLUS, Cell(3, 12)))
         engine.startWave()
@@ -234,7 +264,7 @@ class GameEngineTest {
     @Test
     fun `a bullet tower only hits one enemy at a time`() {
         // The same line-up, but with bullets: exactly one enemy should be taking damage.
-        val shortRoad = GameMap((0..10).map { Cell(3, it) })
+        val shortRoad = Fixtures.stub()
         val engine = engine(map = shortRoad)
         engine.build(TowerKind.SQUARE, Cell(3, 12))
         engine.startWave()
@@ -257,15 +287,115 @@ class GameEngineTest {
     @Test
     fun `nothing can be built or sold once the game is over`() {
         val engine = engine()
-        engine.build(TowerKind.SQUARE, Cell(4, 4))
-        val standing = engine.towerAt(Cell(4, 4))!!
+        engine.build(TowerKind.SQUARE, Cell(1, 4))
+        val standing = engine.towerAt(Cell(1, 4))!!
         engine.playOut()
         assertEquals(Phase.LOST, engine.phase)
-        assertFalse(engine.build(TowerKind.SQUARE, Cell(5, 5)))
+        assertFalse(engine.build(TowerKind.SQUARE, Cell(1, 5)))
         assertFalse(engine.sell(standing))
         assertFalse(engine.upgrade(standing))
         // And no further waves can be started.
         assertFalse(engine.startWave())
+    }
+
+    @Test
+    fun `a tower that would seal the exit off is refused`() {
+        // A single open column, so one tower anywhere along it would shut the board.
+        val engine = engine(map = Fixtures.stub())
+        assertFalse("sealed the only way through", engine.build(TowerKind.SQUARE, Cell(3, 5)))
+        assertNull(engine.towerAt(Cell(3, 5)))
+        assertEquals("a refused build still charged for it", STARTING_MONEY, engine.money)
+        // Below the exit is fine: nothing has to walk through there.
+        assertTrue(engine.build(TowerKind.SQUARE, Cell(3, 12)))
+    }
+
+    @Test
+    fun `a tower is refused when it would dead end the only gap in a wall`() {
+        // The serpentine has one gap per wall. The cell just past a gap is load bearing even
+        // though the gap itself is still open, and the check has to see that.
+        val engine = engine(map = Fixtures.serpentine())
+        assertFalse("dead ended the gap", engine.build(TowerKind.SQUARE, Cell(COLUMNS - 1, 3)))
+        assertTrue(engine.build(TowerKind.SQUARE, Cell(COLUMNS - 2, 3)))
+    }
+
+    @Test
+    fun `a tower may close one way through while another remains`() {
+        val engine = engine(map = Fixtures.openField())
+        // An open field has many routes, so a part-built wall is legal even though it forces a
+        // detour. Only the cell that would close the last gap gets refused.
+        (0 until 5).forEach {
+            assertTrue("could not build at column $it", engine.build(TowerKind.SQUARE, Cell(it, 5)))
+        }
+        assertTrue(engine.route.isNotEmpty())
+        assertEquals(engine.map.exit, engine.route.last())
+    }
+
+    @Test
+    fun `building bends the route`() {
+        val engine = engine(map = Fixtures.openField())
+        val before = engine.route
+        assertEquals(engine.map.entry, before.first())
+        assertEquals(engine.map.exit, before.last())
+
+        // Wall off most of row 4, forcing a detour.
+        (0 until COLUMNS - 2).forEach { engine.build(TowerKind.SQUARE, Cell(it, 4)) }
+        val after = engine.route
+        assertTrue("the route did not change", after != before)
+        assertTrue("the route got no longer", after.size > before.size)
+        assertEquals(engine.map.exit, after.last())
+        assertTrue("the route runs through a tower", after.none { engine.towerAt(it) != null })
+    }
+
+    @Test
+    fun `selling a tower opens the route back up`() {
+        val engine = engine(map = Fixtures.openField())
+        val direct = engine.route.size
+        (0 until COLUMNS - 2).forEach { engine.build(TowerKind.SQUARE, Cell(it, 4)) }
+        assertTrue(engine.route.size > direct)
+
+        engine.towers.toList().forEach { engine.sell(it) }
+        assertEquals(direct, engine.route.size)
+    }
+
+    @Test
+    fun `a tower cannot be dropped on top of an enemy`() {
+        val engine = engine(map = Fixtures.openField())
+        engine.startWave()
+        engine.run(1f)
+        val enemy = engine.enemies.first()
+        assertFalse("built on an enemy", engine.build(TowerKind.SQUARE, enemy.cell))
+        assertFalse("built where an enemy is walking", engine.build(TowerKind.SQUARE, enemy.targetCell))
+    }
+
+    @Test
+    fun `enemies already walking are never walled in`() {
+        // Towers go up all over the board while a wave is running; no enemy may end up stranded.
+        val engine = engine(waves = 10, map = Fixtures.openField())
+        engine.startWave()
+        var elapsed = 0f
+        var row = 1
+        while (elapsed < 25f) {
+            engine.update(1f / 60f)
+            elapsed += 1f / 60f
+            if (engine.money >= SQUARE_TOWER.cost) {
+                (0 until COLUMNS).forEach { engine.build(TowerKind.SQUARE, Cell(it, row)) }
+                row = (row + 1) % (ROWS - 1)
+            }
+            assertTrue(
+                "an enemy was stranded",
+                engine.enemies.none { it.stranded },
+            )
+        }
+        assertTrue("nothing was ever built", engine.towers.isNotEmpty())
+    }
+
+    @Test
+    fun `the route never runs through a blocker`() {
+        repeat(50) { seed ->
+            val engine = GameEngine(totalWaves = 10, map = generateMap(Random(seed.toLong())), random = Random(1))
+            assertTrue("empty route on seed $seed", engine.route.isNotEmpty())
+            assertTrue(engine.route.none { it in engine.map.blockers })
+        }
     }
 
     @Test
@@ -274,10 +404,10 @@ class GameEngineTest {
         engine.startWave()
         engine.update(0.05f)
         val enemy = engine.enemies.first()
-        val before = enemy.distance
+        val before = enemy.remainingSteps(engine.flow)
         // A hitched frame, as happens when the app is backgrounded.
         engine.update(30f)
-        val moved = enemy.distance - before
+        val moved = before - enemy.remainingSteps(engine.flow)
         assertTrue("moved $moved cells in one frame", moved < 0.2f)
     }
 }

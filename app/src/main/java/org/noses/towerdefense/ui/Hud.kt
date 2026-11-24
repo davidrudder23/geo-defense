@@ -10,6 +10,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -328,6 +331,60 @@ fun TowerInfoPanel(
 fun formatSeconds(value: Float): String {
     val hundredths = (value * 100f).toInt()
     return (hundredths / 100).toString() + "." + (hundredths % 100).toString().padStart(2, '0')
+}
+
+/**
+ * The start-wave button, with the build clock running down inside it.
+ *
+ * The bar draining across the slab is the clock; the number beside the label is the gold waiting
+ * to be claimed by going early. Both live in the one control, so there is nothing extra to watch.
+ */
+@Composable
+fun StartWaveButton(
+    wave: Int,
+    secondsLeft: Int,
+    fraction: Float,
+    bonus: Int,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier = modifier
+            .height(54.dp)
+            .background(Palette.entry.copy(alpha = 0.28f), RoundedCornerShape(12.dp))
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        // The remaining time, drawn as the filled part of the slab.
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val width = size.width * fraction.coerceIn(0f, 1f)
+            if (width > 0f) {
+                drawRoundRect(
+                    color = Palette.entry,
+                    size = Size(width, size.height),
+                    cornerRadius = CornerRadius(12.dp.toPx(), 12.dp.toPx()),
+                )
+            }
+        }
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                text = "START WAVE $wave",
+                color = Palette.background,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace,
+                letterSpacing = 1.sp,
+            )
+            Text(
+                text = if (bonus > 0) "${secondsLeft}s  ·  +$bonus GOLD" else "WAVE INCOMING",
+                color = Palette.background.copy(alpha = 0.75f),
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace,
+                letterSpacing = 1.sp,
+            )
+        }
+    }
 }
 
 /** The one button style used everywhere: a flat bold slab. */
