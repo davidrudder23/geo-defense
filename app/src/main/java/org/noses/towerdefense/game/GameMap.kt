@@ -29,14 +29,18 @@ enum class BoardSize(
  * than a choice about how hard the game is.
  *
  * This is a correction, not a preference. A bigger board is a longer walk and more places to
- * build, and measurement put the effect at far more than a nudge: on one 20-wave game the small
- * board came down to 2 lives of 30 while the large and x-large boards finished untouched. Medium
- * is 1 by definition, being the size the curve itself was tuned against. The values come from
- * `CurveSweepTest`.
+ * build, and measurement put the effect at far more than a nudge: uncorrected, the small board
+ * lost 5 of 18 games while the x-large board finished all 18 with 95% of its lives. Medium is 1
+ * by definition, being the size the curve itself was tuned against.
+ *
+ * The values come from `CurveSweepTest`, picked to match medium's own profile over six boards at
+ * three lengths rather than to hit a target directly. They are a compromise, because the sizes
+ * differ in shape and not just in degree: the small board is harsher than medium in the middle of
+ * a game and gentler at the end, which no single multiplier can straighten out.
  */
-private const val SMALL_DIFFICULTY = 0.85f
-private const val LARGE_DIFFICULTY = 1.10f
-private const val XLARGE_DIFFICULTY = 1.10f
+private const val SMALL_DIFFICULTY = 0.88f
+private const val LARGE_DIFFICULTY = 1.12f
+private const val XLARGE_DIFFICULTY = 1.15f
 
 /** The size the game starts on, and the one the difficulty curve was tuned against. */
 val DEFAULT_BOARD_SIZE = BoardSize.MEDIUM

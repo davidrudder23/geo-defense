@@ -60,7 +60,7 @@ class CurveSweepTest {
      * won every game on one board and lost the 20- and 30-wave games on the other two - so shape
      * matters beyond length, and a curve picked on one board is a curve picked by accident.
      */
-    private val boardSeeds = listOf(7, 2, 5)
+    private val boardSeeds = listOf(7, 2, 5, 11, 13, 17)
 
     private fun score(curve: DifficultyCurve, size: BoardSize = DEFAULT_BOARD_SIZE): Scored {
         // Every length on every board, so a curve has to work generally to score well.
@@ -195,42 +195,53 @@ class CurveSweepTest {
     }
 
     /**
-     * Finds the health multiplier each board size needs.
+     * Finds the health multiplier each board size needs to play like the medium board.
      *
-     * The curve itself is fixed here - it was tuned on the medium board and is not up for
-     * revision - so this asks a narrower question: what does each other size have to multiply
-     * enemy health by to play like the medium one? Measurement said the gap is wide. At 20 waves
-     * the small board came down to 2 lives of 30 while large and x-large finished untouched, so
-     * leaving it at 1 would make the size picker a difficulty picker by accident.
+     * The curve itself is fixed - it was tuned on the medium board and is not up for revision -
+     * so this asks a narrower question, and the answer has to be read as a *profile* rather than
+     * a score: for each length, how much of the life budget is left on the worst board and on
+     * average. Medium at 1.00 is the row every other size is trying to match.
+     *
+     * Six boards per size, not three. The first pass used three and the numbers swung from 17/40
+     * to 6/40 across a single multiplier step, which is the leak cliff showing through the noise
+     * rather than a real difference.
      */
     @Test
     fun `sweep the board size multipliers`() {
         assumeTrue("opt in with -Dsweep=1", System.getProperty("sweep").orEmpty().isNotEmpty())
 
-        // Narrowed from a first pass over 0.5 to 2.0, which bracketed each size: small sits
-        // between 0.80 (untouched) and 0.90 (one board loses the 30-wave game), and large and
-        // x-large both between 1.00 (untouched) and 1.20 (30-wave games lost).
-        val multipliers = listOf(0.82f, 0.85f, 0.88f, 1.05f, 1.10f, 1.15f)
+        // Narrowed from a pass over 0.80 to 1.30. Medium at 1.00 leaves, on the worst of six
+        // boards and on average: 0.85/0.98 at ten waves, 0.60/0.85 at twenty, 0.15/0.63 at
+        // thirty. These are the candidates that bracket that for the other three sizes.
+        val multipliers = listOf(0.86f, 0.875f, 0.89f, 1f, 1.1f, 1.12f, 1.15f, 1.18f)
         val out = StringBuilder()
         out.appendLine("# Board size multipliers")
+        out.appendLine()
+        out.appendLine("Lives left as a fraction of the budget: worst board, then mean, per length.")
+        out.appendLine("Target is whatever the medium board does at 1.00.")
         out.appendLine()
 
         for (size in BoardSize.entries) {
             out.appendLine("## " + size.label + "  (" + size.columns + "x" + size.rows + ")")
             out.appendLine()
-            out.appendLine("mult | hits  miss |  10w s7/s2/s5  |  20w s7/s2/s5  |  30w s7/s2/s5")
-            val ranked = multipliers
-                .map { it to score(DifficultyCurve().scaledBy(it), size) }
-                .sortedWith(compareByDescending<Pair<Float, Scored>> { it.second.hits }
-                    .thenBy { it.second.miss })
-            for ((mult, r) in ranked) {
-                out.append(String.format("%4.2f | %4d %5.1f |", mult, r.hits, r.miss))
-                for (run in r.runs) {
+            out.appendLine("mult | lost |   10w min/mean |   20w min/mean |   30w min/mean")
+            for (mult in multipliers) {
+                // The engine applies the size's own multiplier on top of whatever curve it is
+                // handed, so that has to be divided back out or every reading here is squared.
+                val scored = score(DifficultyCurve().scaledBy(mult / size.difficulty), size)
+                out.append(String.format("%4.2f |", mult))
+                out.append(
+                    String.format(" %4d |", scored.runs.count { it.outcome == Phase.LOST }),
+                )
+                // The runs come back grouped by length, in the order the targets are declared.
+                scored.runs.chunked(boardSeeds.size).forEach { byLength ->
+                    val fractions = byLength.map {
+                        if (it.outcome == Phase.LOST) 0f else it.livesFraction
+                    }
                     out.append(
                         String.format(
-                            " %s%2d/%2d",
-                            if (run.outcome == Phase.LOST) "L" else "W",
-                            run.livesLeft, run.startingLives,
+                            " %13s |",
+                            String.format("%.2f/%.2f", fractions.min(), fractions.average()),
                         ),
                     )
                 }

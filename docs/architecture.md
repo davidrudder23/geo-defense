@@ -275,20 +275,31 @@ projection divides the screen by the grid, so the cells shrink and more of them 
 Each size also carries a health multiplier, and this is the part that is not obvious. A size is
 meant to be a choice about the board, not about how hard the game is - but a bigger board is a
 longer walk *and* more places to build, and both make a game easier on their own. Left
-uncorrected the picker would have been a difficulty slider by accident, and not a subtle one. At
-20 waves, uncorrected:
+uncorrected the picker would have been a difficulty slider by accident, and not a subtle one.
+Uncorrected, over 18 games each (six boards at three lengths):
 
-| size | lives left, two boards |
-|---|---|
-| S | **2/30**, 25/30 |
-| M | 30/30, 21/30 |
-| L | 30/30, 30/30 |
-| XL | 30/30, 28/30 |
+| size | games lost | lives left at 30 waves, worst board / mean |
+|---|---:|---|
+| S | 5 of 18 | 0.00 / 0.32 |
+| M | 0 of 18 | 0.15 / 0.63 |
+| L | 0 of 18 | 0.80 / 0.93 |
+| XL | 0 of 18 | 0.80 / 0.95 |
 
-So the corrections are 0.85 for small, 1.10 for large and x-large, and 1 for medium by definition,
-since medium is the board the curve itself was tuned against. `CurveSweepTest` has the sweep that
-chose them, and with them every size plays all three lengths without losing, with 30 waves costing
-real lives on all four.
+The corrections are **0.88** small, **1.12** large, **1.15** x-large, and 1 for medium by
+definition. They were chosen by matching medium's whole profile - worst board and mean, at all
+three lengths - rather than by aiming at the difficulty targets directly, since the question for a
+size is "does this play like medium?" and not "is this hard?".
+
+Two things are worth being honest about. The first pass used three boards per size and picked
+0.85/1.10/1.10; six boards moved all three, because with three the numbers swung from 0.22 to 0.00
+across a single multiplier step. That was the leak cliff showing through the noise, not a
+difference in the boards.
+
+The second is that the sizes differ in *shape*, not only in degree, so a single multiplier cannot
+straighten them out. The small board is harsher than medium in the middle of a game and gentler at
+the end; the large boards stay easier than medium at 20 waves whatever the multiplier that keeps
+30 waves survivable. The chosen values are the best compromise measurement offers, and x-large at
+1.15 gives up one 30-wave game on the hardest of six boards to match the rest of the profile.
 
 The correction lives in `GameEngine`, applied to the curve it was handed, rather than inside the
 curve. Board size is a choice the player makes up front, like the wave count - not something that
