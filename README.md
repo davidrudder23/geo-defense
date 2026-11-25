@@ -23,7 +23,13 @@ The APK lands in `app/build/outputs/apk/debug/app-debug.apk`.
 
 ## How to play
 
-Pick a game length on the menu: **10, 20, 25 or 30 waves**. Longer games *are* harder games: each
+Pick a board size on the menu — **S, M, L or XL** (7x12 up to 15x26). Bigger means more cells
+rather than a bigger picture: the cells shrink and more of them fit on the screen, so a large
+board is a wider canvas to build a maze on. Each size carries a health correction, because a
+longer walk and more room to build would otherwise make the big boards much easier — so the size
+changes the board, not the difficulty.
+
+Then pick a game length: **10, 20, 25 or 30 waves**. Longer games *are* harder games: each
 wave scales off its own number, so wave 8 is wave 8 whatever length you picked, and a 30-wave game
 climbs well past where a 10-wave one stops. A 10-wave game is a sampler, 20 is a real game, and 30
 is meant to be tough. Longer games also start with more lives — 20, 30 and 40 — and pay more per
@@ -113,7 +119,9 @@ The numbers worth playing with, all in one place each:
   paying more. `CurveSweepTest` is the grid search that picked the current values.
 - **Board generation** — `GameMap.kt`. Boards are drawn repeatedly and filtered on route length,
   because a board's route length drives difficulty more than anything else does.
-- **Board size** — `COLUMNS` and `ROWS` in `GameMap.kt`. The board scales to fit the screen.
+- **Board sizes** — the `BoardSize` enum in `GameMap.kt`: the four grids, and the health
+  multiplier each one carries so that size stays a choice about the board rather than about
+  difficulty.
 - **Colours** — `Palette.kt`.
 
 ### Measuring a change

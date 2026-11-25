@@ -249,8 +249,9 @@ wave 30, and not to a spike. The worst single wave was four to six lives. It sim
 
 ### Boards have to be comparable before a curve means anything
 
-`generateMap` draws up to 200 boards and keeps the first whose walk is at least 45 steps, at 24%
-blocker density. That is not cosmetic. Route length drives difficulty more than any other single
+`generateMap` draws up to 200 boards and keeps the first whose walk is long enough - 38% of the
+board's cells, so 55 steps on the medium board - at 24% blocker density. Boards that cannot reach
+that in 200 draws fall back to the longest one drawn. That is not cosmetic. Route length drives difficulty more than any other single
 thing, and a single random draw gave anywhere from 19 to 74 steps - which is not a difficulty
 curve, it is a lottery. Ten rounds of tuning were quietly fitting one map: the curve that won
 every game on it lost the 20- and 30-wave games on two other boards.
@@ -258,6 +259,41 @@ every game on it lost the 20- and 30-wave games on two other boards.
 Holding the walk to a narrow band is what makes one curve meaningful. It is not sufficient, though
 - at matched length, board *shape* still swings the outcome, so the sweep scores every curve on
 three boards at three lengths and a curve has to survive the hardest of them, not the luckiest.
+
+## Board size, and why it carries a correction
+
+The menu offers four sizes, and bigger means *more cells*, not the same cells magnified: the
+projection divides the screen by the grid, so the cells shrink and more of them fit.
+
+| size | cells | walk, measured |
+|---|---|---:|
+| S | 7 x 12 | 28-32 |
+| M | 9 x 16 | 47-50 |
+| L | 12 x 21 | 95-96 |
+| XL | 15 x 26 | 106-126 |
+
+Each size also carries a health multiplier, and this is the part that is not obvious. A size is
+meant to be a choice about the board, not about how hard the game is - but a bigger board is a
+longer walk *and* more places to build, and both make a game easier on their own. Left
+uncorrected the picker would have been a difficulty slider by accident, and not a subtle one. At
+20 waves, uncorrected:
+
+| size | lives left, two boards |
+|---|---|
+| S | **2/30**, 25/30 |
+| M | 30/30, 21/30 |
+| L | 30/30, 30/30 |
+| XL | 30/30, 28/30 |
+
+So the corrections are 0.85 for small, 1.10 for large and x-large, and 1 for medium by definition,
+since medium is the board the curve itself was tuned against. `CurveSweepTest` has the sweep that
+chose them, and with them every size plays all three lengths without losing, with 30 waves costing
+real lives on all four.
+
+The correction lives in `GameEngine`, applied to the curve it was handed, rather than inside the
+curve. Board size is a choice the player makes up front, like the wave count - not something that
+emerges from how they play - which is also why a hand-built board such as a test fixture carries
+no size and plays the curve exactly as given.
 
 ## Measuring difficulty
 

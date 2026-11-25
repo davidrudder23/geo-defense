@@ -22,11 +22,15 @@ private val STEPS = arrayOf(
  * smaller number than the cell it is standing on. One sweep routes any number of enemies, and
  * when a tower changes the maze a single rebuild re-routes all of them at once.
  */
-class FlowField(private val distances: IntArray) {
+class FlowField(
+    private val distances: IntArray,
+    private val columns: Int,
+    private val rows: Int,
+) {
 
     operator fun get(cell: Cell): Int =
-        if (cell.col in 0 until COLUMNS && cell.row in 0 until ROWS) {
-            distances[cell.col + cell.row * COLUMNS]
+        if (cell.col in 0 until columns && cell.row in 0 until rows) {
+            distances[cell.col + cell.row * columns]
         } else {
             UNREACHABLE
         }
@@ -91,27 +95,36 @@ class FlowField(private val distances: IntArray) {
  * [passable] says whether something can stand on a cell; blockers, towers and anything else in
  * the way simply answer false.
  */
-fun flowFieldTo(target: Cell, passable: (Cell) -> Boolean): FlowField {
-    val distances = IntArray(COLUMNS * ROWS) { UNREACHABLE }
-    if (!passable(target)) return FlowField(distances)
+fun flowFieldTo(
+    target: Cell,
+    columns: Int,
+    rows: Int,
+    passable: (Cell) -> Boolean,
+): FlowField {
+    val distances = IntArray(columns * rows) { UNREACHABLE }
+    if (!passable(target)) return FlowField(distances, columns, rows)
 
     val queue = ArrayDeque<Cell>()
-    distances[target.col + target.row * COLUMNS] = 0
+    distances[target.col + target.row * columns] = 0
     queue.add(target)
 
     while (queue.isNotEmpty()) {
         val cell = queue.removeFirst()
-        val nextDistance = distances[cell.col + cell.row * COLUMNS] + 1
+        val nextDistance = distances[cell.col + cell.row * columns] + 1
         for ((dx, dy) in STEPS) {
             val col = cell.col + dx
             val row = cell.row + dy
-            if (col !in 0 until COLUMNS || row !in 0 until ROWS) continue
-            val index = col + row * COLUMNS
+            if (col !in 0 until columns || row !in 0 until rows) continue
+            val index = col + row * columns
             if (distances[index] != UNREACHABLE) continue
             if (!passable(Cell(col, row))) continue
             distances[index] = nextDistance
             queue.add(Cell(col, row))
         }
     }
-    return FlowField(distances)
+    return FlowField(distances, columns, rows)
 }
+
+/** The flow field to [target] on [map]'s grid, which is nearly always the one wanted. */
+fun flowFieldOn(map: GameMap, target: Cell = map.exit, passable: (Cell) -> Boolean): FlowField =
+    flowFieldTo(target, map.columns, map.rows, passable)

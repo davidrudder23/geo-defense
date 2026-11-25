@@ -59,8 +59,17 @@ class GameEngine(
     /** Opening cash. A parameter so a test can set up a rich board without reaching into state. */
     startingMoney: Int = STARTING_MONEY,
     /** The difficulty curve. A parameter so the probe can sweep it without a rebuild. */
-    private val curve: DifficultyCurve = DifficultyCurve(),
+    curve: DifficultyCurve = DifficultyCurve(),
 ) {
+    /**
+     * The curve this board plays on: the one passed in, corrected for the board's size.
+     *
+     * The correction belongs here rather than in the curve itself because board size is a choice
+     * the player makes at the menu, like the wave count - not something that emerges from how
+     * they play. A hand-built board carries no size and so plays the curve as given.
+     */
+    private val boardCurve: DifficultyCurve = curve.scaledBy(map.size?.difficulty ?: 1f)
+
     var money: Int = startingMoney
         private set
     var lives: Int = startingLivesFor(totalWaves)
@@ -144,7 +153,7 @@ class GameEngine(
         }
         readySeconds = 0f
         waveNumber++
-        wave = buildWave(waveNumber, totalWaves, random, curve)
+        wave = buildWave(waveNumber, totalWaves, random, boardCurve)
         waveClock = 0f
         spawned = 0
         phase = Phase.RUNNING
@@ -173,7 +182,7 @@ class GameEngine(
      * building could strand one somewhere it can never be killed or leak from.
      */
     fun leavesAWayThrough(cell: Cell): Boolean {
-        val candidate = flowFieldTo(map.exit) { at ->
+        val candidate = flowFieldOn(map) { at ->
             map.isOpen(at) && at != cell && towerAt(at) == null
         }
         if (!candidate.canReachExit(map.entry)) return false
@@ -190,7 +199,7 @@ class GameEngine(
     }
 
     private fun buildFlow(): FlowField =
-        flowFieldTo(map.exit) { at -> map.isOpen(at) && towerAt(at) == null }
+        flowFieldOn(map) { at -> map.isOpen(at) && towerAt(at) == null }
 
     /** Recomputes the routing for the maze as it now stands, re-routing every enemy at once. */
     private fun rebuildFlow() {

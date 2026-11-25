@@ -9,7 +9,7 @@ class EnemiesTest {
 
     private fun lane() = Fixtures.lane()
 
-    private fun flowFor(map: GameMap) = flowFieldTo(map.exit) { map.isOpen(it) }
+    private fun flowFor(map: GameMap) = flowFieldOn(map) { map.isOpen(it) }
 
     @Test
     fun `the three kinds play differently`() {
@@ -117,14 +117,14 @@ class EnemiesTest {
     fun `an enemy re-routes when the maze changes under it`() {
         // Straight down column 3 to begin with.
         val map = Fixtures.openField()
-        val direct = flowFieldTo(map.exit) { map.isOpen(it) }
+        val direct = flowFieldOn(map) { map.isOpen(it) }
         val enemy = Enemy(SQUARE_ENEMY).apply { spawnAt(map.entry, direct) }
         repeat(120) { enemy.advance(1f / 60f, map.exit, direct) }
         val wentStraight = enemy.cell
 
         // Now wall off the column ahead of it and hand it the new routing.
         val wall = (0..4).map { Cell(it, wentStraight.row + 2) }.toSet()
-        val detour = flowFieldTo(map.exit) { map.isOpen(it) && it !in wall }
+        val detour = flowFieldOn(map) { map.isOpen(it) && it !in wall }
         repeat(240) { enemy.advance(1f / 60f, map.exit, detour) }
 
         assertTrue("walked into the wall", enemy.cell !in wall)
@@ -139,7 +139,7 @@ class EnemiesTest {
         val enemy = Enemy(SQUARE_ENEMY).apply { spawnAt(map.entry, flow) }
 
         // A field where nothing can reach the exit at all.
-        val sealed = flowFieldTo(map.exit) { false }
+        val sealed = flowFieldOn(map) { false }
         repeat(120) { enemy.advance(1f / 60f, map.exit, sealed) }
 
         assertTrue(enemy.stranded)

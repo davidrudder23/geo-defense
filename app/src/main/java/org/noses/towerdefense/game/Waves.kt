@@ -54,6 +54,9 @@ data class DifficultyCurve(
     }
 
     fun rewardScaleFor(number: Int): Float = 1f + rewardGrowth * (number - 1)
+
+    /** The same curve with everything [factor] times as healthy. */
+    fun scaledBy(factor: Float): DifficultyCurve = copy(scale = scale * factor)
 }
 
 // Found by sweeping the whole grid against three targets at once - a 10-wave game that is easy,

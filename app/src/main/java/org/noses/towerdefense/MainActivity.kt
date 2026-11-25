@@ -20,6 +20,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.noses.towerdefense.audio.MusicPlayer
 import org.noses.towerdefense.audio.SfxPlayer
+import org.noses.towerdefense.game.DEFAULT_BOARD_SIZE
 import org.noses.towerdefense.ui.GameScreen
 import org.noses.towerdefense.ui.MenuScreen
 import org.noses.towerdefense.ui.Palette
@@ -35,6 +36,8 @@ class MainActivity : ComponentActivity() {
 private fun App() {
     // null while on the menu; the wave count once a game is running.
     var waves by remember { mutableStateOf<Int?>(null) }
+    // The size picked on the menu, kept across "play again" so it does not have to be re-picked.
+    var board by remember { mutableStateOf(DEFAULT_BOARD_SIZE) }
     // Bumped to throw away the old game and build a fresh one on "play again".
     var gameId by remember { mutableIntStateOf(0) }
     // Two independent switches. The music loop and the effects mixer are separate tracks, so
@@ -79,12 +82,17 @@ private fun App() {
     ) {
         val running = waves
         if (running == null) {
-            MenuScreen(onStart = { waves = it })
+            MenuScreen(
+                board = board,
+                onPickBoard = { board = it },
+                onStart = { waves = it },
+            )
         } else {
             // The key means a new game gets a brand new engine and a new random map.
             androidx.compose.runtime.key(gameId) {
                 GameScreen(
                     totalWaves = running,
+                    board = board,
                     sfx = sfx,
                     musicOn = musicOn,
                     effectsOn = effectsOn,

@@ -7,12 +7,10 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
-import org.noses.towerdefense.game.COLUMNS
 import org.noses.towerdefense.game.Cell
 import org.noses.towerdefense.game.EnemyKind
 import org.noses.towerdefense.game.GameEngine
 import org.noses.towerdefense.game.Point
-import org.noses.towerdefense.game.ROWS
 import org.noses.towerdefense.game.Tower
 import org.noses.towerdefense.game.TowerKind
 import org.noses.towerdefense.game.center
@@ -23,7 +21,13 @@ import kotlin.math.min
  * Maps between board cells and pixels. The board keeps square cells and is centred in whatever
  * space it is given.
  */
-data class Projection(val cellSize: Float, val originX: Float, val originY: Float) {
+data class Projection(
+    val cellSize: Float,
+    val originX: Float,
+    val originY: Float,
+    val columns: Int,
+    val rows: Int,
+) {
     fun toOffset(point: Point): Offset =
         Offset(originX + point.x * cellSize, originY + point.y * cellSize)
 
@@ -36,16 +40,24 @@ data class Projection(val cellSize: Float, val originX: Float, val originY: Floa
     fun toCell(offset: Offset): Cell? {
         val col = floor((offset.x - originX) / cellSize).toInt()
         val row = floor((offset.y - originY) / cellSize).toInt()
-        return if (col in 0 until COLUMNS && row in 0 until ROWS) Cell(col, row) else null
+        return if (col in 0 until columns && row in 0 until rows) Cell(col, row) else null
     }
 }
 
-fun projectionFor(size: Size): Projection {
-    val cellSize = min(size.width / COLUMNS, size.height / ROWS)
+/**
+ * Fits [columns] x [rows] cells into [size].
+ *
+ * The cell size falls out of the grid rather than being fixed, which is what makes a larger board
+ * mean smaller graphics and more of them on screen instead of the same board cropped.
+ */
+fun projectionFor(size: Size, columns: Int, rows: Int): Projection {
+    val cellSize = min(size.width / columns, size.height / rows)
     return Projection(
         cellSize = cellSize,
-        originX = (size.width - cellSize * COLUMNS) / 2f,
-        originY = (size.height - cellSize * ROWS) / 2f,
+        originX = (size.width - cellSize * columns) / 2f,
+        originY = (size.height - cellSize * rows) / 2f,
+        columns = columns,
+        rows = rows,
     )
 }
 
@@ -85,12 +97,12 @@ private fun DrawScope.drawGround(engine: GameEngine, projection: Projection, arm
     drawRect(
         color = Palette.board,
         topLeft = Offset(projection.originX, projection.originY),
-        size = Size(cell * COLUMNS, cell * ROWS),
+        size = Size(cell * projection.columns, cell * projection.rows),
     )
     // A dot in the middle of every cell you could build on. While a tower is armed the free
     // dots brighten, which shows where it can go without tinting half the board.
-    for (row in 0 until ROWS) {
-        for (col in 0 until COLUMNS) {
+    for (row in 0 until projection.rows) {
+        for (col in 0 until projection.columns) {
             if (!engine.map.isBuildable(col, row)) continue
             val here = Cell(col, row)
             val free = engine.towerAt(here) == null

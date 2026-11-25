@@ -1,6 +1,8 @@
 package org.noses.towerdefense.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,19 +23,27 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.noses.towerdefense.game.ALL_TOWERS
+import org.noses.towerdefense.game.BoardSize
 import org.noses.towerdefense.game.CIRCLE_ENEMY
 import org.noses.towerdefense.game.EnemyKind
 import org.noses.towerdefense.game.SQUARE_ENEMY
 import org.noses.towerdefense.game.TRIANGLE_ENEMY
 import org.noses.towerdefense.game.WAVE_COUNTS
 
-/** Title screen: pick how long the game should be, with a legend of the pieces. */
+/** Title screen: pick how big and how long the game should be, with a legend of the pieces. */
 @Composable
-fun MenuScreen(onStart: (Int) -> Unit) {
+fun MenuScreen(
+    board: BoardSize,
+    onPickBoard: (BoardSize) -> Unit,
+    onStart: (Int) -> Unit,
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(Palette.background)
+            // Two pickers and a six-row legend is more than a short phone has room for, and a
+            // Column without this silently clips the bottom - which is where the buttons are.
+            .verticalScroll(rememberScrollState())
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
@@ -85,7 +95,31 @@ fun MenuScreen(onStart: (Int) -> Unit) {
             )
         }
 
-        Spacer(Modifier.weight(1f))
+        Spacer(Modifier.height(30.dp))
+        SectionLabel("HOW BIG?")
+        Spacer(Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            BoardSize.entries.forEach { option ->
+                val picked = option == board
+                GameButton(
+                    label = option.label,
+                    // The picked size stays lit and the rest sit back, so the row reads as a
+                    // setting rather than four things to press.
+                    color = if (picked) Palette.entry else Palette.dim,
+                    modifier = Modifier.weight(1f),
+                    onClick = { onPickBoard(option) },
+                )
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            text = board.columns.toString() + " x " + board.rows + " cells",
+            color = Palette.dim,
+            fontSize = 11.sp,
+            fontFamily = FontFamily.Monospace,
+        )
+
+        Spacer(Modifier.height(20.dp))
         SectionLabel("HOW LONG?")
         Spacer(Modifier.height(12.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {

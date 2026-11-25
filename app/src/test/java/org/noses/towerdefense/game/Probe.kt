@@ -221,7 +221,7 @@ class Mazer(
      * wants the distance rather than the yes or no.
      */
     private fun routeLengthWith(engine: GameEngine, cell: Cell): Int {
-        val field = flowFieldTo(engine.map.exit) { at ->
+        val field = flowFieldOn(engine.map) { at ->
             engine.map.isOpen(at) && at != cell && engine.towerAt(at) == null
         }
         return field[engine.map.entry]

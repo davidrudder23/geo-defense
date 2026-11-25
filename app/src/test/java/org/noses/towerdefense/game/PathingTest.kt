@@ -12,7 +12,7 @@ class PathingTest {
     @Test
     fun `distance to the exit counts steps, not diagonals`() {
         val exit = Cell(0, 0)
-        val flow = flowFieldTo(exit, everywhere)
+        val flow = flowFieldTo(exit, COLUMNS, ROWS, everywhere)
         assertEquals(0, flow[exit])
         assertEquals(1, flow[Cell(1, 0)])
         assertEquals(1, flow[Cell(0, 1)])
@@ -22,7 +22,7 @@ class PathingTest {
 
     @Test
     fun `cells off the board are unreachable`() {
-        val flow = flowFieldTo(Cell(0, 0), everywhere)
+        val flow = flowFieldTo(Cell(0, 0), COLUMNS, ROWS, everywhere)
         assertEquals(UNREACHABLE, flow[Cell(-1, 0)])
         assertEquals(UNREACHABLE, flow[Cell(COLUMNS, 0)])
         assertEquals(UNREACHABLE, flow[Cell(0, ROWS)])
@@ -32,14 +32,14 @@ class PathingTest {
     fun `a walled off cell cannot reach the exit`() {
         // Box the corner cell in completely.
         val walls = setOf(Cell(1, 0), Cell(0, 1))
-        val flow = flowFieldTo(Cell(5, 5)) { everywhere(it) && it !in walls }
+        val flow = flowFieldTo(Cell(5, 5), COLUMNS, ROWS) { everywhere(it) && it !in walls }
         assertTrue(!flow.canReachExit(Cell(0, 0)))
         assertNull(flow.next(Cell(0, 0)))
     }
 
     @Test
     fun `a blocked target makes everything unreachable`() {
-        val flow = flowFieldTo(Cell(3, 3)) { it != Cell(3, 3) }
+        val flow = flowFieldTo(Cell(3, 3), COLUMNS, ROWS) { it != Cell(3, 3) }
         assertTrue(!flow.canReachExit(Cell(0, 0)))
     }
 
@@ -47,7 +47,7 @@ class PathingTest {
     fun `next always steps closer to the exit`() {
         val exit = Cell(4, ROWS - 1)
         val walls = setOf(Cell(4, 8), Cell(3, 8), Cell(5, 8))
-        val flow = flowFieldTo(exit) { everywhere(it) && it !in walls }
+        val flow = flowFieldTo(exit, COLUMNS, ROWS) { everywhere(it) && it !in walls }
 
         var cell = Cell(4, 0)
         var guard = 0
@@ -63,7 +63,7 @@ class PathingTest {
     @Test
     fun `the exit itself has nowhere further to go`() {
         val exit = Cell(2, 2)
-        val flow = flowFieldTo(exit, everywhere)
+        val flow = flowFieldTo(exit, COLUMNS, ROWS, everywhere)
         assertNull(flow.next(exit))
     }
 
@@ -71,7 +71,7 @@ class PathingTest {
     fun `a route runs from the start to the exit without gaps`() {
         val exit = Cell(0, ROWS - 1)
         val walls = (0..5).map { Cell(it, 7) }.toSet()
-        val flow = flowFieldTo(exit) { everywhere(it) && it !in walls }
+        val flow = flowFieldTo(exit, COLUMNS, ROWS) { everywhere(it) && it !in walls }
 
         val route = flow.routeFrom(Cell(0, 0))
         assertEquals(Cell(0, 0), route.first())
@@ -87,7 +87,7 @@ class PathingTest {
     @Test
     fun `a route from a sealed off cell is empty`() {
         val walls = setOf(Cell(1, 0), Cell(0, 1))
-        val flow = flowFieldTo(Cell(5, 5)) { everywhere(it) && it !in walls }
+        val flow = flowFieldTo(Cell(5, 5), COLUMNS, ROWS) { everywhere(it) && it !in walls }
         assertTrue(flow.routeFrom(Cell(0, 0)).isEmpty())
     }
 
@@ -95,7 +95,7 @@ class PathingTest {
     fun `walking keeps going straight when two routes are equally short`() {
         // On an open board there are many shortest routes. Preferring the current direction
         // stops an enemy dithering between two of them.
-        val flow = flowFieldTo(Cell(0, 0), everywhere)
+        val flow = flowFieldTo(Cell(0, 0), COLUMNS, ROWS, everywhere)
         val straightOn = flow.next(Cell(4, 4), preferred = 0 to -1)
         assertEquals(Cell(4, 3), straightOn)
         val turning = flow.next(Cell(4, 4), preferred = -1 to 0)
@@ -104,7 +104,7 @@ class PathingTest {
 
     @Test
     fun `a preferred direction is ignored when it does not get closer`() {
-        val flow = flowFieldTo(Cell(0, 0), everywhere)
+        val flow = flowFieldTo(Cell(0, 0), COLUMNS, ROWS, everywhere)
         // Heading away from the exit cannot be honoured.
         val next = flow.next(Cell(4, 4), preferred = 0 to 1)!!
         assertTrue(flow[next] < flow[Cell(4, 4)])

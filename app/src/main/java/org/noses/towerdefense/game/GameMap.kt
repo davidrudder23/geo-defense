@@ -2,9 +2,48 @@ package org.noses.towerdefense.game
 
 import kotlin.random.Random
 
-/** Board size in cells. Portrait, so taller than it is wide. */
-const val COLUMNS = 9
-const val ROWS = 16
+/**
+ * The board sizes offered at the menu.
+ *
+ * A bigger board is not the same board magnified - the cells get smaller and more of them fit on
+ * the screen, so it is a wider canvas to build a maze on. All four keep roughly the same portrait
+ * shape, since the board is drawn to fit and a different aspect would just letterbox.
+ */
+enum class BoardSize(
+    val label: String,
+    val columns: Int,
+    val rows: Int,
+    val difficulty: Float,
+) {
+    SMALL("S", 7, 12, SMALL_DIFFICULTY),
+    MEDIUM("M", 9, 16, 1f),
+    LARGE("L", 12, 21, LARGE_DIFFICULTY),
+    XLARGE("XL", 15, 26, XLARGE_DIFFICULTY),
+    ;
+
+    val cells: Int get() = columns * rows
+}
+
+/**
+ * What each size multiplies enemy health by, so that a size is a choice about the board rather
+ * than a choice about how hard the game is.
+ *
+ * This is a correction, not a preference. A bigger board is a longer walk and more places to
+ * build, and measurement put the effect at far more than a nudge: on one 20-wave game the small
+ * board came down to 2 lives of 30 while the large and x-large boards finished untouched. Medium
+ * is 1 by definition, being the size the curve itself was tuned against. The values come from
+ * `CurveSweepTest`.
+ */
+private const val SMALL_DIFFICULTY = 0.85f
+private const val LARGE_DIFFICULTY = 1.10f
+private const val XLARGE_DIFFICULTY = 1.10f
+
+/** The size the game starts on, and the one the difficulty curve was tuned against. */
+val DEFAULT_BOARD_SIZE = BoardSize.MEDIUM
+
+/** The default board's dimensions, kept as names because so much is written in terms of them. */
+val COLUMNS = DEFAULT_BOARD_SIZE.columns
+val ROWS = DEFAULT_BOARD_SIZE.rows
 
 /** A whole-number board cell. */
 data class Cell(val col: Int, val row: Int)
@@ -26,9 +65,11 @@ class GameMap(
     val entry: Cell,
     val exit: Cell,
     val blockers: Set<Cell>,
+    val columns: Int = COLUMNS,
+    val rows: Int = ROWS,
+    /** The size this was generated at, or null for a hand-built board such as a test fixture. */
+    val size: BoardSize? = null,
 ) {
-    val columns = COLUMNS
-    val rows = ROWS
 
     fun inBounds(col: Int, row: Int): Boolean = col in 0 until columns && row in 0 until rows
 
@@ -66,16 +107,23 @@ class GameMap(
 private const val BOARD_CANDIDATES = 200
 
 /**
- * The shortest way through that a board is allowed to have.
+ * The shortest way through a board may have, as a fraction of its cells.
  *
  * Best-of-a-handful was not enough: one seed still produced a 31-step board where another gave
- * 63, and that board lost every game. A floor is what actually bounds the spread.
+ * 63, and that board lost every game. A floor is what actually bounds the spread. It has to be a
+ * fraction rather than a count, because a small board cannot hold a big board's walk - the
+ * medium board's 55 steps is more cells than the small board has open at all.
+ *
+ * It is a target rather than a guarantee: boards that cannot reach it in [BOARD_CANDIDATES]
+ * draws fall back to the longest one drawn, which is the same thing by a slower route.
  */
-private const val MIN_ROUTE_STEPS = 55
+private const val MIN_ROUTE_FRACTION = 0.382f
+
+private fun minRouteSteps(size: BoardSize): Int = (size.cells * MIN_ROUTE_FRACTION).toInt()
 
 /** Steps from entry to exit with nothing built, which is the number that matters. */
 private fun routeLength(map: GameMap): Int =
-    flowFieldTo(map.exit) { map.isOpen(it) }[map.entry]
+    flowFieldTo(map.exit, map.columns, map.rows) { map.isOpen(it) }[map.entry]
 
 /**
  * A board to play on.
@@ -83,31 +131,37 @@ private fun routeLength(map: GameMap): Int =
  * Draws several and keeps the one with the longest way through, so boards are comparable with
  * each other. See [BOARD_CANDIDATES].
  */
-fun generateMap(random: Random = Random.Default): GameMap {
+fun generateMap(size: BoardSize, random: Random = Random.Default): GameMap {
+    val floor = minRouteSteps(size)
     var best: GameMap? = null
     var bestLength = -1
     repeat(BOARD_CANDIDATES) {
-        val candidate = drawMap(random)
+        val candidate = drawMap(size, random)
         val length = routeLength(candidate)
         if (length != UNREACHABLE && length > bestLength) {
             best = candidate
             bestLength = length
         }
         // Good enough is good enough; no need to draw the rest.
-        if (bestLength >= MIN_ROUTE_STEPS) return best!!
+        if (bestLength >= floor) return best!!
     }
-    return best ?: drawMap(random)
+    return best ?: drawMap(size, random)
 }
 
-private fun drawMap(random: Random): GameMap {
-    val entry = Cell(random.nextInt(COLUMNS), 0)
-    val exit = Cell(random.nextInt(COLUMNS), ROWS - 1)
+/** A board of the default size. */
+fun generateMap(random: Random = Random.Default): GameMap = generateMap(DEFAULT_BOARD_SIZE, random)
+
+private fun drawMap(size: BoardSize, random: Random): GameMap {
+    val columns = size.columns
+    val rows = size.rows
+    val entry = Cell(random.nextInt(columns), 0)
+    val exit = Cell(random.nextInt(columns), rows - 1)
 
     val blockers = HashSet<Cell>()
     // Denser than it looks like it needs to be. Blockers are what make the walk long, and the
     // length of the walk turned out to drive difficulty more than any other single thing, so a
     // sparse board is not just an easy board - it is an unbalanceable one.
-    val wanted = (COLUMNS * ROWS * 0.24f).toInt()
+    val wanted = (size.cells * 0.24f).toInt()
 
     var attempts = 0
     while (blockers.size < wanted && attempts < 400) {
@@ -115,26 +169,38 @@ private fun drawMap(random: Random): GameMap {
 
         val horizontal = random.nextBoolean()
         val length = 1 + random.nextInt(4)
-        val startCol = random.nextInt(COLUMNS)
-        val startRow = random.nextInt(ROWS)
+        val startCol = random.nextInt(columns)
+        val startRow = random.nextInt(rows)
 
         val wall = (0 until length).map { step ->
             if (horizontal) Cell(startCol + step, startRow) else Cell(startCol, startRow + step)
         }
 
         // A wall has to fit on the board and leave the entry and exit cells alone.
-        if (wall.any { it.col !in 0 until COLUMNS || it.row !in 0 until ROWS }) continue
+        if (wall.any { it.col !in 0 until columns || it.row !in 0 until rows }) continue
         if (wall.any { it == entry || it == exit }) continue
         if (wall.all { it in blockers }) continue
 
         blockers.addAll(wall)
         // Putting it back is cheaper than being clever about which walls are safe.
-        if (!hasRoute(entry, exit, blockers)) blockers.removeAll(wall.toSet())
+        if (!hasRoute(entry, exit, blockers, columns, rows)) blockers.removeAll(wall.toSet())
     }
 
-    return GameMap(entry = entry, exit = exit, blockers = blockers)
+    return GameMap(
+        entry = entry,
+        exit = exit,
+        blockers = blockers,
+        columns = columns,
+        rows = rows,
+        size = size,
+    )
 }
 
 /** Is there any way from [from] to [to] with [blockers] in the way? */
-private fun hasRoute(from: Cell, to: Cell, blockers: Set<Cell>): Boolean =
-    flowFieldTo(to) { it !in blockers }.canReachExit(from)
+private fun hasRoute(
+    from: Cell,
+    to: Cell,
+    blockers: Set<Cell>,
+    columns: Int,
+    rows: Int,
+): Boolean = flowFieldTo(to, columns, rows) { it !in blockers }.canReachExit(from)

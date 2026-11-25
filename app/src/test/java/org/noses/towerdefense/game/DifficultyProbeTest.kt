@@ -43,6 +43,23 @@ class DifficultyProbeTest {
         Probe.play("no levels", 10, board(), Spam(TowerKind.SQUARE), seed = 7),
         Probe.play("no levels", 20, board(), Spam(TowerKind.SQUARE), seed = 7),
 
+        // Every board size at one length, on two boards each. Board size is a menu choice like
+        // the wave count, so it needs measuring like one: a bigger board is a longer walk and
+        // more places to build, and both of those make a game easier.
+        *BoardSize.entries.flatMap { size ->
+            listOf(10, 20, 30).flatMap { waves ->
+                listOf(7, 5).map { boardSeed ->
+                    Probe.play(
+                        label = "size ${size.label}/s$boardSeed",
+                        totalWaves = waves,
+                        map = generateMap(size, Random(boardSeed)),
+                        strategy = Mazer(TowerKind.SQUARE),
+                        seed = boardSeed,
+                    )
+                }
+            }
+        }.toTypedArray(),
+
         // Tower kinds at one length, all levelling, so nothing is confounded.
         Probe.play("kinds", 20, Fixtures.serpentine(), Upgrader(TowerKind.SQUARE, 4)),
         Probe.play("kinds", 20, Fixtures.serpentine(), Upgrader(TowerKind.HEXAGON, 4)),

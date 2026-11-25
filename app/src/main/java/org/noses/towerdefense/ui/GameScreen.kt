@@ -33,7 +33,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.noses.towerdefense.audio.SfxPlayer
+import org.noses.towerdefense.game.BoardSize
 import org.noses.towerdefense.game.GameEngine
+import org.noses.towerdefense.game.generateMap
 import org.noses.towerdefense.game.READY_SECONDS
 import org.noses.towerdefense.game.Phase
 import org.noses.towerdefense.game.SoundCue
@@ -94,6 +96,7 @@ private fun GameEngine.hudState() = HudState(
 @Composable
 fun GameScreen(
     totalWaves: Int,
+    board: BoardSize,
     sfx: SfxPlayer,
     musicOn: Boolean,
     effectsOn: Boolean,
@@ -102,7 +105,7 @@ fun GameScreen(
     onPlayAgain: () -> Unit,
     onMenu: () -> Unit,
 ) {
-    val engine = remember { GameEngine(totalWaves) }
+    val engine = remember { GameEngine(totalWaves, generateMap(board)) }
 
     var frame by remember { mutableIntStateOf(0) }
     var hud by remember { mutableStateOf(engine.hudState()) }
@@ -167,7 +170,8 @@ fun GameScreen(
                     .pointerInput(engine) {
                         detectTapGestures { tap ->
                             if (boardSize == Size.Zero) return@detectTapGestures
-                            val cell = projectionFor(boardSize).toCell(tap) ?: return@detectTapGestures
+                            val cell = projectionFor(boardSize, board.columns, board.rows)
+                                .toCell(tap) ?: return@detectTapGestures
                             val existing = engine.towerAt(cell)
                             when {
                                 // Tapping a tower selects it, so it can be upgraded or sold.
@@ -181,7 +185,13 @@ fun GameScreen(
                         }
                     },
             ) {
-                drawGame(engine, projectionFor(size), armed, selected, redrawKey = frame)
+                drawGame(
+                    engine,
+                    projectionFor(size, board.columns, board.rows),
+                    armed,
+                    selected,
+                    redrawKey = frame,
+                )
             }
 
             if (hud.phase == Phase.READY) {

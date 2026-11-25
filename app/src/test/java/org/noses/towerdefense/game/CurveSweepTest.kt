@@ -62,14 +62,14 @@ class CurveSweepTest {
      */
     private val boardSeeds = listOf(7, 2, 5)
 
-    private fun score(curve: DifficultyCurve): Scored {
+    private fun score(curve: DifficultyCurve, size: BoardSize = DEFAULT_BOARD_SIZE): Scored {
         // Every length on every board, so a curve has to work generally to score well.
         val runs = targets.flatMap { target ->
             boardSeeds.map { boardSeed ->
                 Probe.play(
                     label = "${target.waves}w/s$boardSeed",
                     totalWaves = target.waves,
-                    map = generateMap(kotlin.random.Random(boardSeed)),
+                    map = generateMap(size, kotlin.random.Random(boardSeed)),
                     strategy = Mazer(TowerKind.SQUARE),
                     seed = boardSeed,
                     curve = curve,
@@ -192,5 +192,58 @@ class CurveSweepTest {
         directory.mkdirs()
         File(directory, "sweep.md").writeText("```\n$text```\n")
         println("written to " + File(directory, "sweep.md").absolutePath)
+    }
+
+    /**
+     * Finds the health multiplier each board size needs.
+     *
+     * The curve itself is fixed here - it was tuned on the medium board and is not up for
+     * revision - so this asks a narrower question: what does each other size have to multiply
+     * enemy health by to play like the medium one? Measurement said the gap is wide. At 20 waves
+     * the small board came down to 2 lives of 30 while large and x-large finished untouched, so
+     * leaving it at 1 would make the size picker a difficulty picker by accident.
+     */
+    @Test
+    fun `sweep the board size multipliers`() {
+        assumeTrue("opt in with -Dsweep=1", System.getProperty("sweep").orEmpty().isNotEmpty())
+
+        // Narrowed from a first pass over 0.5 to 2.0, which bracketed each size: small sits
+        // between 0.80 (untouched) and 0.90 (one board loses the 30-wave game), and large and
+        // x-large both between 1.00 (untouched) and 1.20 (30-wave games lost).
+        val multipliers = listOf(0.82f, 0.85f, 0.88f, 1.05f, 1.10f, 1.15f)
+        val out = StringBuilder()
+        out.appendLine("# Board size multipliers")
+        out.appendLine()
+
+        for (size in BoardSize.entries) {
+            out.appendLine("## " + size.label + "  (" + size.columns + "x" + size.rows + ")")
+            out.appendLine()
+            out.appendLine("mult | hits  miss |  10w s7/s2/s5  |  20w s7/s2/s5  |  30w s7/s2/s5")
+            val ranked = multipliers
+                .map { it to score(DifficultyCurve().scaledBy(it), size) }
+                .sortedWith(compareByDescending<Pair<Float, Scored>> { it.second.hits }
+                    .thenBy { it.second.miss })
+            for ((mult, r) in ranked) {
+                out.append(String.format("%4.2f | %4d %5.1f |", mult, r.hits, r.miss))
+                for (run in r.runs) {
+                    out.append(
+                        String.format(
+                            " %s%2d/%2d",
+                            if (run.outcome == Phase.LOST) "L" else "W",
+                            run.livesLeft, run.startingLives,
+                        ),
+                    )
+                }
+                out.appendLine()
+            }
+            out.appendLine()
+        }
+
+        val directory = java.io.File("build/difficulty")
+        directory.mkdirs()
+        val file = java.io.File(directory, "boards.md")
+        file.writeText(out.toString())
+        println(out)
+        println("written to " + file.absolutePath)
     }
 }

@@ -47,7 +47,7 @@ class MapGeneratorTest {
         // This is the one invariant the generator must never break: an unsolvable map is an
         // unplayable game.
         maps().forEach { map ->
-            val flow = flowFieldTo(map.exit) { map.isOpen(it) }
+            val flow = flowFieldOn(map) { map.isOpen(it) }
             assertTrue("no route on this map", flow.canReachExit(map.entry))
         }
     }
@@ -80,7 +80,7 @@ class MapGeneratorTest {
     fun `the route is not simply a straight line down the board`() {
         // If the blockers never got in the way the maps would be pointless.
         val wandering = maps(60).count { map ->
-            val route = flowFieldTo(map.exit) { map.isOpen(it) }.routeFrom(map.entry)
+            val route = flowFieldOn(map) { map.isOpen(it) }.routeFrom(map.entry)
             route.size > ROWS
         }
         assertTrue("only $wandering of 60 maps made the route bend", wandering > 30)
