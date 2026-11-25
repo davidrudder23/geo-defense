@@ -60,6 +60,13 @@ data class HudState(
     val readyFraction: Float,
     /** Gold that starting the wave right now would pay. */
     val rushBonus: Int,
+    /**
+     * How many times longer the player has made the walk than the bare map's shortest way.
+     *
+     * Shown because it is also the multiplier on enemy health. A rule the player can see is a
+     * rule; the same rule hidden reads as the game cheating.
+     */
+    val mazeFactor: Float,
 ) {
     val finished: Boolean get() = phase == Phase.WON || phase == Phase.LOST
 }
@@ -75,6 +82,7 @@ private fun GameEngine.hudState() = HudState(
     readySeconds = readySecondsLeft,
     readyFraction = if (phase == Phase.READY) readySeconds / READY_SECONDS else 0f,
     rushBonus = rushBonus,
+    mazeFactor = mazeFactor,
 )
 
 /**

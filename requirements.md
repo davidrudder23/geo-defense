@@ -29,6 +29,9 @@ it from the entry to the exit.
 * A weapon can be placed anywhere on the open field
 * Maps are populated with fixed blockers that enemies cannot move through
 * Enemies cannot move through weapons either, so placing a weapon changes the path
+* The longer the player makes the route than the map's own shortest way, the more health the
+  enemies have, in proportion. Mazing buys time but costs toughness, so it is a trade rather than
+  a free win. The multiplier is shown in the top bar.
 * A placement that would leave no way at all from the entry to the exit is refused, and so is
   one that would strand an enemy already on the board. The board can be bent, not sealed.
 * A weapon cannot be dropped onto a cell an enemy is standing on or walking into

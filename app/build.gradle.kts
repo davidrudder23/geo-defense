@@ -26,6 +26,15 @@ android {
     buildFeatures {
         compose = true
     }
+
+    testOptions {
+        unitTests.all {
+            // The difficulty probe reports by printing, so let a test's stdout through.
+            it.testLogging {
+                showStandardStreams = true
+            }
+        }
+    }
 }
 
 dependencies {

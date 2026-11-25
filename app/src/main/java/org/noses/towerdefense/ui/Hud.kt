@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextDecoration
+import kotlin.math.roundToInt
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -104,6 +105,17 @@ fun TopBar(
         Stat("CASH", hud.money.toString(), Palette.text)
         Spacer(Modifier.width(12.dp))
         Stat("WAVE", hud.wave.coerceAtLeast(1).toString() + "/" + hud.totalWaves, Palette.text)
+
+        // Only once the player has actually built a maze, so it appears at the moment it starts
+        // to matter rather than sitting at 1.0x taking up room all game.
+        if (hud.mazeFactor > 1.05f) {
+            Spacer(Modifier.width(12.dp))
+            Stat(
+                label = "MAZE",
+                value = oneDecimal(hud.mazeFactor) + "x",
+                color = if (hud.mazeFactor >= 2f) Palette.healthLow else Palette.text,
+            )
+        }
         Spacer(Modifier.weight(1f))
 
         // Pause, speed, then the two mutes, in the order you reach for them.
@@ -202,6 +214,12 @@ private fun PauseGlyph(paused: Boolean, tint: Color) {
             )
         }
     }
+}
+
+/** One decimal place, built by hand so no locale can turn the point into a comma. */
+private fun oneDecimal(value: Float): String {
+    val tenths = (value * 10f).roundToInt()
+    return (tenths / 10).toString() + "." + (tenths % 10).toString()
 }
 
 @Composable

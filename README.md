@@ -13,6 +13,7 @@ they sit. See [docs/architecture.md](docs/architecture.md) for how it fits toget
 ```bash
 ./gradlew :app:installDebug     # build and install on a connected device or emulator
 ./gradlew :app:test             # run the unit tests
+./gradlew :app:test --tests "*DifficultyProbeTest"   # play games headlessly and report difficulty
 ./gradlew :app:assembleDebug    # just build the APK
 ```
 
@@ -34,11 +35,15 @@ the difficulty curve is stretched to fit whatever length you choose, so the last
 - **Build anywhere.** There is no road. Towers are walls, so where you put them decides the
   route the enemies take. You cannot seal the exit off completely — that placement is refused.
   The dashed line shows the way through as it currently stands.
+- **Mazing is a trade, not a freebie.** The longer you make the walk, the tougher the enemies
+  arrive: double the path, double their health. A `MAZE` multiplier appears in the top bar once
+  you start bending the route, and it is exactly the multiplier being applied. Buying your towers
+  more time still works — it just costs something now.
 - **Pause, speed, music and effects** sit in the top right. Music and effects mute separately,
   so you can keep the shots and drop the backing track. Speed cycles 1x, 2x, 5x and back to 1x.
   Building, upgrading and selling all still work while paused.
-- You lose a life for every enemy that walks off the end of the road, two for a square. Twenty
-  lives, and the board is lost.
+- You lose a life for every enemy that reaches the exit, two for a square. Twenty lives, and the
+  board is lost.
 
 ### The pieces
 
@@ -54,24 +59,31 @@ the difficulty curve is stretched to fit whatever length you choose, so the last
 | Blast | hexagon | $45 | Lobs a shell that explodes, damaging everything near where it lands. Slow. |
 | Laser | plus sign | $60 | Fires a beam that runs off the edge of the board, hitting every enemy in the line. |
 
-The laser aims at whichever enemy is furthest along the road and the beam continues to the board
-edge, so it is at its best on a long straight stretch with enemies strung out along it.
+Every tower shoots at whichever enemy in range has the least ground left to cover — the one
+closest to getting out, which in a maze is not always the one that has walked furthest. The
+laser's beam carries on to the edge of the board, so it is at its best down a long straight
+stretch with enemies strung out along it, and since you build the maze you can lay that stretch
+out for it on purpose.
 
 ## Where things live
 
 ```
 app/src/main/java/org/noses/towerdefense/
   game/          the rules, in plain Kotlin with no Android imports
-    GameMap.kt     board size, random road generation
+    GameMap.kt     board size, blockers, random map generation
+    Pathing.kt     the flow field: one sweep that routes every enemy
     Enemies.kt     the three enemy kinds and their stats
     Towers.kt      the three tower kinds, levels, upgrade costs
     Waves.kt       what each wave is made of, and how it scales
     GameEngine.kt  the simulation: spawning, movement, firing, money, win/lose
     Effects.kt     shots in flight, blasts, beams
     Geometry.kt    vector maths for ranges and the laser line
+    Sounds.kt      the sound cues the rules ask for, named but not played
   audio/
     Music.kt       the soundtrack, synthesized sample by sample
     MusicPlayer.kt hands the rendered loop to an AudioTrack
+    Sfx.kt         every sound effect, synthesized the same way
+    SfxPlayer.kt   mixes and plays the clips
   ui/
     GameScreen.kt  the game loop and screen layout
     Board.kt       everything drawn on the board
@@ -82,7 +94,7 @@ app/src/main/java/org/noses/towerdefense/
 ```
 
 Everything under `game/` and `audio/Music.kt` is pure Kotlin, so it runs in ordinary JVM unit
-tests with no emulator. That is where the 60 tests point.
+tests with no emulator. That is where the 124 tests point.
 
 ## Tuning it
 
@@ -95,6 +107,27 @@ The numbers worth playing with, all in one place each:
 - **Starting money and lives** — the constants at the top of `GameEngine.kt`.
 - **Board size** — `COLUMNS` and `ROWS` in `GameMap.kt`. The board scales to fit the screen.
 - **Colours** — `Palette.kt`.
+
+### Measuring a change
+
+Guessing at balance is slow, so there is an instrument for it. `DifficultyProbeTest` plays whole
+games headlessly with a stand-in player and reports what happened wave by wave:
+
+```bash
+./gradlew :app:test --tests "*DifficultyProbeTest"
+```
+
+The table prints, and lands in `app/build/difficulty/report.md`. It changes nothing about the
+game; it only watches. Beyond the obvious columns, the two that earn their place are `reach`, how
+far along the route the deepest enemy got before dying, and `path`, how long a maze the player
+built. Zero leaks can mean "comfortable" or "died on the last tower", and `reach` is what tells
+those apart. Several stand-in players run, because difficulty is a property of the player and the
+waves together, not of the waves alone.
+
+As of the current numbers every scenario wins, and all but one wins with all 20 lives and no
+leaks at all, so the curve is flat. The exception is telling: the only run that leaked is the one
+where the stand-in player built no maze. `docs/architecture.md` has what the report says about
+why.
 
 ## The music
 

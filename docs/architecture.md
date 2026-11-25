@@ -56,8 +56,8 @@ val step = dt.coerceIn(0f, 0.05f)
 ```
 
 If the app is backgrounded for thirty seconds, the next frame arrives with a thirty-second `dt`.
-Without the clamp every enemy would teleport the length of the road in one step, straight past
-every tower, and the player would lose the game while not looking at it. Clamping means a long
+Without the clamp every enemy would cross the whole board in one step, straight through the maze
+and past every tower, and the player would lose the game while not looking at it. Clamping means a long
 stall makes the game briefly run slow rather than break. There is a test for this
 (`a long frame cannot teleport enemies through the defence`).
 
@@ -169,6 +169,40 @@ Two things that look like edge cases and are not:
 - A cell an enemy is standing on, or walking into, is refused outright. Dropping a wall on top
   of something is not a routing question.
 
+## What the maze costs
+
+Towers are walls, so a player can stretch a short walk into a long one and give their defence
+many times as long to work. Measured, that was worth more than every other advantage put
+together: on an open board, mazing alone turned the one losing run in the report into a clean
+sweep, and dropped how far enemies got from 100% of the route to 23%. Left alone, mazing is not a
+strategy, it is *the* answer, and the rest of the game is decoration.
+
+So enemies are tougher in proportion to the extra walking the player caused:
+
+```kotlin
+val mazeFactor = currentRouteLength / directSteps     // never below 1
+val threatScale = 1f + MAZE_THREAT * (mazeFactor - 1f)
+```
+
+Mazing is still good — more time under fire is still more time under fire — but it is now a trade
+rather than free, which is what makes it a decision instead of a formality.
+
+Three details carry the design:
+
+- **The baseline is the map's own shortest route, not a straight line.** Only the length the
+  *player* added counts. A board that generated a winding way through is the map's character, and
+  measuring against a straight line would hand that board to the player pre-punished.
+- **The scale is read as each enemy spawns, not when the wave starts.** Building during a wave is
+  allowed, so a wave-start reading could be dodged completely: keep the path short, start the wave
+  cheap, then wall it up once the enemies are committed. Reading it per spawn closes that, because
+  later arrivals in the same wave answer for the maze as it is when they set off. There is a test
+  for exactly that hole (`mazing once a wave is running still counts`).
+- **It is on the HUD.** A `MAZE 2.4x` stat appears next to the wave counter once the factor passes
+  1.05, so it shows up at the moment it starts to matter. A rule the player can see is a rule; the
+  same rule hidden reads as the game cheating.
+
+`MAZE_THREAT` is the one knob: 1 is proportional, 0 turns the whole thing off.
+
 ## The wave timer
 
 Between waves a 15 second clock runs, after which the next wave arrives on its own. Pressing the
@@ -198,6 +232,76 @@ Wave 10 of 10 and wave 30 of 30 are near enough identical. A 30-wave game is not
 harder than a 10-wave game, it is the same arc stretched out. There is a test pinning this
 (`the difficulty arc is the same shape whatever the game length`).
 
+## Measuring difficulty
+
+`Probe.kt`, in the test sources, plays whole games headlessly and records what happened wave by
+wave. It is an instrument rather than a test: it only reads the engine's public surface, changes
+nothing, and its output is evidence about the build it ran against.
+
+```
+./gradlew :app:testDebugUnitTest --tests "*DifficultyProbeTest"
+```
+
+The report prints, and is written to `app/build/difficulty/report.md`.
+
+It exists because a win or lose verdict cannot answer the only question that matters for tuning.
+A game won with every life intact and a game won on the last life both say `WON`. The columns
+that do answer it:
+
+- **`leak` and `lost`** - enemies that reached the exit, and the lives that cost. The per-wave
+  curve is the point; a total hides the shape, because zero leaks for nine waves then eight on the
+  tenth and zero leaks throughout are completely different games that end identically.
+- **`reach`** - how far along the route the deepest enemy got before dying, as a percentage. This
+  is the one a leak count cannot give you: zero leaks can mean "comfortable" or "every enemy died
+  on the last tower", and only this separates them.
+- **`path`** - the route length. Since the player authors the maze, this is a lever they hold
+  rather than one the game sets.
+- **`inv` against `cash`** - power bought so far against money still in hand. Where cash climbs
+  while `inv` sits still, the economy has run out of things to sell.
+
+A stand-in player stands in for a human, because difficulty is a property of the *pair*. Several
+are needed: `Spam` buys quantity, `Upgrader` buys quality, `Mixed` spreads across the three
+towers, and `Mazer` puts every tower wherever it makes the walk longest. `Mazer` is the one worth
+watching, since "build the longest possible snake" is available as a single dominant answer, and
+if it is far stronger than placing towers sensibly then the maze is the whole game.
+
+**What it found.** Every scenario won, and all but one won with 20 of 20 lives and not a single
+leak, so the per-wave curve is flat zero almost everywhere. Three things stand out, and none of
+them are "enemies need more HP":
+
+- **The maze is the dominant lever, by a long way.** Three runs on an open field, differing by one
+  thing each, separate it from the upgrades it is normally tangled up with:
+
+  | strategy | path | peak reach | leaks |
+  |---|---:|---:|---:|
+  | spam, no maze, level one | 15 | 100% | 5 |
+  | maze only, level one throughout | 83 | 23% | 0 |
+  | maze and levels | 83 | 11% | 0 |
+
+  Mazing alone turns the game's only leaky run into a clean sweep and drops `reach` from 100% to
+  23%. Levelling then buys 23% down to 11%. So the maze is worth more than the upgrades, and the
+  single scenario that leaked is the one where the player declined to build one - which is the
+  real finding: the game is only difficult if you play it badly.
+
+- **The economy has no sink.** Bullet spam saturates at 20 towers around wave 4 and then banks
+  everything: by wave 20 it is sitting on 5,234 unspent gold against 400 invested. Money stops
+  being a decision long before the game ends, which is why levers that squeeze income do nothing
+  on their own.
+
+- **The rush bonus is currently free money.** Taking it every wave is worth 30 gold a wave, and
+  turning it off changes the outcome not at all, for the same reason: cash was never the
+  constraint.
+
+Two cautions about reading the report. The generated-board runs vary route length and tower count
+together, so they suggest that shorter boards play closer but do not establish it - the open-field
+triple above is the controlled comparison, and the generated ones are only a sanity check that
+real boards behave like the fixtures. And every stand-in player eventually stops spending, so each
+run is a *lower* bound on how strong a human could be: the numbers say the game is too easy even
+against a player who wastes thousands of gold.
+
+The thresholds behind the `verdict` line are a starting point for naming what the numbers show,
+not a rule the game enforces. They are meant to be argued with.
+
 ## The three towers
 
 They are deliberately different *shapes of answer*, not three damage numbers:
@@ -207,9 +311,18 @@ They are deliberately different *shapes of answer*, not three damage numbers:
 - **Blast** does the opposite: the shell flies to a *fixed point* captured when it was fired. It
   explodes where it was aimed whether or not the target survived the trip, which is what makes it
   good against crowds and bad against stragglers.
-- **Laser** picks a direction rather than a target. It aims at the enemy furthest along the road,
-  then `rayExit` extends the beam to the edge of the board and everything within half a cell of
-  that line takes the hit.
+- **Laser** picks a direction rather than a target. It aims at the enemy with the least ground
+  left to cover, then `rayExit` extends the beam to the edge of the board and everything within
+  half a cell of that line takes the hit.
+
+Every tower picks its target the same way, by fewest steps still to walk rather than most distance
+travelled. On a fixed road those are the same question. In a maze they are not: an enemy that has
+walked a long way round may be further from the exit than one that has just set off down a short
+way through, and the one about to get out is the one worth shooting. The flow field already knows
+that number, so targeting costs nothing extra.
+
+The laser is at its best on a long straight stretch with enemies strung out along it - and since
+the player builds the maze, they can lay that stretch out on purpose and point a laser down it.
 
 The armoured circle exists to stop one tower being the answer to everything. Armour subtracts a
 flat amount per hit, so it punishes the laser (many small hits) and rewards the blast (few big
@@ -237,22 +350,48 @@ never spends a cycle on music while it is running.
 
 ## What the tests cover
 
-60 JVM tests, no emulator, a few seconds to run. Worth knowing what they are for:
+124 JVM tests, no emulator, a few seconds to run. Worth knowing what they are for:
 
 - **Map generation** is checked across 300 random seeds, not one. Properties, not examples: the
-  road starts at the top and ends at the bottom, every step is a single step, it never crosses
-  itself, it is never two cells thick, and there is room left to build.
-- **The engine** is tested on hand-built maps — a straight column, a serpentine — so towers can be
-  placed at known distances and the result is deterministic. Winning, losing, building, selling,
-  upgrading, piercing, and the long-frame clamp all have one.
+  entry is on the top row and the exit on the bottom, neither is ever blocked, every blocker is on
+  the board, there is always a way from one gate to the other, there are enough blockers to be
+  worth navigating, there is room left to build, maps differ from each other, and the way through
+  is never just a straight line down the board.
+- **Routing** has its own file. That a step is a step and not a diagonal, that off-board and
+  walled-off cells read as unreachable, that `next` always moves strictly closer to the exit, that
+  a route runs end to end without gaps, and that a walker holds its line when two ways are equally
+  short.
+- **The maze rules** are the ones worth having. A tower that would seal the exit off is refused; so
+  is one that would dead-end the only gap in a wall, while a tower that closes one way through
+  when another remains is allowed. Building bends the route, selling opens it back up, a tower
+  cannot be dropped on an enemy, and enemies already walking are never walled in.
+- **The engine** is tested on hand-built maps — an open field, a two-wide lane, a single column, a
+  serpentine — so towers sit at known distances and the result is deterministic. Winning, losing,
+  building, selling, upgrading, piercing, and the long-frame clamp all have one.
+- **The wave timer** is checked in game time: the clock counts down and starts the wave by itself,
+  starting early pays exactly what the button was showing, nothing is paid when it runs out, and
+  the clock neither runs during a wave nor after the game is over.
 - **The music** is checked structurally: right length for the tempo, not silent, normalized
   without clipping, quiet at both ends, a kick on every beat, and busier in the middle than at the
   start so the arrangement demonstrably happens.
 
-The tests that failed first time all failed because the *test setup* was wrong, not the game —
-asking a laser to pierce enemies it was not actually in line with, or expecting a game to be lost
-when only one wave had been started. Worth remembering when writing tests against a simulation:
-it is easy to assert something the scenario cannot produce.
+The tests that failed first time nearly all failed because the *test setup* was wrong, not the
+game — asking a laser to pierce enemies it was not actually in line with, expecting a game to be
+lost when only one wave had been started, or putting a tower on a fixture cell that turned out to
+be a blocker. Worth remembering when writing tests against a simulation: it is easy to assert
+something the scenario cannot produce.
+
+The best of them was a test that asserted a legal build and got a refusal. The cell sat directly
+below the only gap in the wall above it, so putting a tower there dead-ended the corridor even
+though the gap itself stayed open. The engine was right and the test was wrong. It is also the
+case that sold the full reachability check over a cheaper "is this cell a chokepoint" heuristic,
+which would have waved that placement through — the kind of thing that is obvious in a picture and
+invisible in a rule of thumb.
+
+One fixture was wrong in a way that passed. An early serpentine left columns 7 and 8 open on every
+row, so enemies ran straight down the side and skipped the snake entirely: the route measured 30
+steps instead of 64, and every test built on it was quietly measuring a much easier board. A
+fixture that produces a *plausible* board is more dangerous than one that crashes.
 
 ## If you carry this forward
 
