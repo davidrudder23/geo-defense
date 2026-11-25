@@ -20,21 +20,6 @@ const val READY_SECONDS = 15f
 /** Gold paid per whole second given up by starting a wave early. */
 const val RUSH_BONUS_PER_SECOND = 2
 
-/**
- * How hard the maze the player builds pushes back, as a multiplier on the extra length they added.
- *
- * Towers are walls, so a player can stretch a short walk into a long one and give their defence
- * many times as long to work. Measured, that was worth more than every other advantage together:
- * on an open board, mazing alone took a losing game to a clean sweep. Left alone it is not a
- * strategy, it is the answer, and the rest of the game is decoration.
- *
- * So enemies are tougher in proportion to how much longer the player made their walk. Mazing is
- * still good - more time under fire is still more time under fire - but it is now a trade rather
- * than free, which is what makes it a decision.
- *
- * 1 is proportional: twice the walk, twice the health. 0 turns it off entirely.
- */
-const val MAZE_THREAT = 1f
 
 const val MAX_STEP_SECONDS = 0.05f
 
@@ -60,8 +45,10 @@ class GameEngine(
     val totalWaves: Int,
     val map: GameMap = generateMap(),
     private val random: Random = Random.Default,
+    /** Opening cash. A parameter so a test can set up a rich board without reaching into state. */
+    startingMoney: Int = STARTING_MONEY,
 ) {
-    var money: Int = STARTING_MONEY
+    var money: Int = startingMoney
         private set
     var lives: Int = STARTING_LIVES
         private set
@@ -84,37 +71,6 @@ class GameEngine(
     /** The way through as it stands, drawn on the board so the player can see their maze. */
     var route: List<Cell> = flow.routeFrom(map.entry)
         private set
-
-    /**
-     * The shortest way across this map with nothing built on it.
-     *
-     * The baseline the maze is measured against, so that only the length the *player* added
-     * counts. A map that comes with a long way round is the map's own character and should not
-     * read as the player's doing - otherwise a board that generated a winding route would arrive
-     * pre-punished.
-     */
-    private val directSteps: Int = flowFieldTo(map.exit) { map.isOpen(it) }[map.entry]
-        .let { if (it == UNREACHABLE) 1 else max(1, it) }
-
-    /**
-     * How many times longer the current way through is than the bare map's. Never below 1.
-     */
-    val mazeFactor: Float
-        get() {
-            val steps = flow[map.entry]
-            if (steps == UNREACHABLE) return 1f
-            return (steps.toFloat() / directSteps).coerceAtLeast(1f)
-        }
-
-    /**
-     * What the player's maze costs them in enemy health, as a multiplier.
-     *
-     * Read when each enemy *spawns* rather than when the wave starts. Building is allowed during
-     * a wave, so a wave-start reading could be dodged by keeping the path short until the wave is
-     * running and then mazing it up. Reading it per spawn closes that: later arrivals in the same
-     * wave answer for the maze as it is when they set off.
-     */
-    val threatScale: Float get() = 1f + MAZE_THREAT * (mazeFactor - 1f)
     val projectiles = ArrayList<Projectile>()
     val blasts = ArrayList<Blast>()
     val beams = ArrayList<Beam>()
@@ -305,7 +261,7 @@ class GameEngine(
         while (spawned < wave.size && wave.spawns[spawned].time <= waveClock) {
             val spawn = wave.spawns[spawned]
             enemies.add(
-                Enemy(statsFor(spawn.kind), wave.hpScale * threatScale, wave.speedScale)
+                Enemy(statsFor(spawn.kind), wave.hpScale, wave.speedScale)
                     .apply { spawnAt(map.entry, flow) }
             )
             spawned++
@@ -387,13 +343,21 @@ class GameEngine(
         )
     }
 
-    /** Hits everything along a line from the tower to the edge of the board. */
+    /**
+     * Hits everything along a line from the tower, out to the limit of its range.
+     *
+     * The beam stops where the tower's reach stops, rather than running off the board. Drawing it
+     * any further would show the player a line through enemies it did not actually hit.
+     */
     private fun fireLaser(tower: Tower, target: Enemy) {
         val dir = directionTo(tower.center, target.position)
-        val end = rayExit(tower.center, dir, map.columns.toFloat(), map.rows.toFloat())
-        beams.add(Beam(tower.center, end))
+        val edge = rayExit(tower.center, dir, map.columns.toFloat(), map.rows.toFloat())
+        val reach = kotlin.math.min(tower.range, distanceBetween(tower.center, edge))
+        beams.add(Beam(tower.center, Point(tower.center.x + dir.x * reach, tower.center.y + dir.y * reach)))
         for (enemy in enemies) {
             if (!enemy.alive) continue
+            val along = alongRay(enemy.position, tower.center, dir) ?: continue
+            if (along > reach + enemy.stats.radius) continue
             val offset = offsetFromRay(enemy.position, tower.center, dir) ?: continue
             if (offset <= BEAM_HALF_WIDTH + enemy.stats.radius) enemy.hit(tower.damage)
         }

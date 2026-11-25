@@ -43,13 +43,27 @@ class WavesTest {
     }
 
     @Test
-    fun `the difficulty arc is the same shape whatever the game length`() {
-        // The last wave of a 10-wave game should be about as hard as the last of a 30-wave game,
-        // so picking a length changes how long you play, not how hard it gets.
-        val short = buildWave(10, 10, Random(1))
-        val long = buildWave(30, 30, Random(1))
-        assertEquals(short.hpScale, long.hpScale, 0.01f)
-        assertEquals(short.size.toFloat(), long.size.toFloat(), 2f)
+    fun `a wave is the same wave whatever the game length`() {
+        // Difficulty is keyed to the wave's own number, so wave 8 is wave 8 in every game. This
+        // is what makes a longer game a harder one rather than the same arc stretched out.
+        val inShort = buildWave(8, 10, Random(1))
+        val inLong = buildWave(8, 30, Random(1))
+        assertEquals(inShort.hpScale, inLong.hpScale, 0.001f)
+        assertEquals(inShort.size, inLong.size)
+        assertEquals(inShort.speedScale, inLong.speedScale, 0.001f)
+    }
+
+    @Test
+    fun `choosing a longer game is choosing a harder one`() {
+        // The end of a 30-wave game has to climb well past where a 10-wave game stops, or the
+        // length picker is only changing how long you sit there.
+        val shortEnd = buildWave(10, 10, Random(1))
+        val longEnd = buildWave(30, 30, Random(1))
+        assertTrue(
+            "10-wave ended at ${shortEnd.hpScale}, 30-wave at ${longEnd.hpScale}",
+            longEnd.hpScale > shortEnd.hpScale * 4f,
+        )
+        assertTrue(longEnd.size > shortEnd.size)
     }
 
     @Test

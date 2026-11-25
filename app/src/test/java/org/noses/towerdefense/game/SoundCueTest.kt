@@ -7,8 +7,11 @@ import kotlin.random.Random
 
 class SoundCueTest {
 
-    private fun engine(waves: Int = 10, map: GameMap = Fixtures.lane()) =
-        GameEngine(totalWaves = waves, map = map, random = Random(42))
+    private fun engine(
+        waves: Int = 10,
+        map: GameMap = Fixtures.lane(),
+        money: Int = STARTING_MONEY,
+    ) = GameEngine(totalWaves = waves, map = map, random = Random(42), startingMoney = money)
 
     private fun GameEngine.run(seconds: Float, step: Float = 1f / 60f) {
         var elapsed = 0f
@@ -117,11 +120,15 @@ class SoundCueTest {
 
     @Test
     fun `a refused upgrade is silent`() {
-        val engine = engine()
+        // Rich enough to reach the top level: upgrades get steeply more expensive, and a loop
+        // that stops only at max level would spin forever once the money ran out.
+        val engine = engine(money = 1_000_000)
         engine.build(TowerKind.SQUARE, Cell(1, 3))
         val tower = engine.towerAt(Cell(1, 3))!!
         // Max it out, then try once more.
-        while (tower.canUpgrade) engine.upgrade(tower)
+        while (tower.canUpgrade) {
+            if (!engine.upgrade(tower)) break
+        }
 
         val drained = ArrayList<SoundCue>()
         engine.drainSounds(drained)

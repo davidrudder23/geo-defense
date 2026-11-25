@@ -15,47 +15,38 @@ import kotlin.random.Random
  */
 class DifficultyProbeTest {
 
+    /** One board for the length comparison, so only the number of waves differs. */
+    private fun board() = generateMap(Random(7))
+
     private fun scenarios(): List<GameRun> = listOf(
-        // The same strategy over the three game lengths. Difficulty currently scales on progress
-        // through the game, so these should look alike; that is the thing to watch if that
-        // changes.
-        Probe.play("serpentine", 10, Fixtures.serpentine(), Spam(TowerKind.SQUARE)),
-        Probe.play("serpentine", 20, Fixtures.serpentine(), Spam(TowerKind.SQUARE)),
-        Probe.play("serpentine", 30, Fixtures.serpentine(), Spam(TowerKind.SQUARE)),
+        // The headline question now that difficulty is keyed to the wave number: does each
+        // length land where it should? Same board, same competent player, three game lengths.
+        // 10 should be a sampler, 20 a real game, 30 an endurance run.
+        Probe.play("generated", 10, board(), Mazer(TowerKind.SQUARE), seed = 7),
+        Probe.play("generated", 20, board(), Mazer(TowerKind.SQUARE), seed = 7),
+        Probe.play("generated", 30, board(), Mazer(TowerKind.SQUARE), seed = 7),
 
-        // Same board and length, different ways of spending. If one of these is far ahead of the
-        // others it is the dominant strategy, and that is a balance problem on its own.
-        Probe.play("serpentine", 20, Fixtures.serpentine(), Upgrader(TowerKind.SQUARE, 4)),
-        Probe.play("serpentine", 20, Fixtures.serpentine(), Mixed()),
+        // The same three for a player who builds and levels well but never lengthens the route.
+        // Mazing is meant to be worth doing, so these should sit behind the runs above.
+        Probe.play("no maze", 10, board(), Upgrader(TowerKind.SQUARE, 6), seed = 7),
+        Probe.play("no maze", 20, board(), Upgrader(TowerKind.SQUARE, 6), seed = 7),
+        Probe.play("no maze", 30, board(), Upgrader(TowerKind.SQUARE, 6), seed = 7),
 
-        // Does one tower dominate? These four differ only in what gets built - same board, same
-        // cap, all levelling with their spare money - so the comparison is not tangled up with
-        // whether upgrades happened, which was what made the earlier Mixed-vs-Spam reading
-        // worthless.
+        // The floor: never upgrades at all. Expected to fall behind, since difficulty now
+        // climbs with the wave number whether or not the defence deepens.
+        Probe.play("no levels", 10, board(), Spam(TowerKind.SQUARE), seed = 7),
+        Probe.play("no levels", 20, board(), Spam(TowerKind.SQUARE), seed = 7),
+
+        // Tower kinds at one length, all levelling, so nothing is confounded.
+        Probe.play("kinds", 20, Fixtures.serpentine(), Upgrader(TowerKind.SQUARE, 4)),
         Probe.play("kinds", 20, Fixtures.serpentine(), Upgrader(TowerKind.HEXAGON, 4)),
         Probe.play("kinds", 20, Fixtures.serpentine(), Upgrader(TowerKind.PLUS, 4)),
         Probe.play("kinds", 20, Fixtures.serpentine(), Mixed(levelUp = true)),
 
-        // The strategy the maze invites, on an empty board so the maze is the player's doing and
-        // not the map's. Three runs that differ by one thing each, so a result can be pinned on
-        // the maze or on the upgrades rather than on both at once:
-        //   spam        - neither
-        //   maze only   - the maze, at level one throughout
-        //   maze + levels - both
-        Probe.play("open field", 20, Fixtures.openField(), Spam(TowerKind.SQUARE)),
-        Probe.play("open field", 20, Fixtures.openField(), Mazer(TowerKind.SQUARE, levelUp = false)),
-        Probe.play("open field", 20, Fixtures.openField(), Mazer(TowerKind.SQUARE)),
+        // A couple of fixed boards, so a run of the report is comparable with the last one even
+        // when map generation changes.
         Probe.play("serpentine", 20, Fixtures.serpentine(), Mazer(TowerKind.SQUARE)),
-
-        // Identical to the second row except the player never presses the button early, which
-        // isolates what the rush bonus is worth over a whole game.
-        Probe.play("serpentine, patient", 20, Fixtures.serpentine(), Spam(TowerKind.SQUARE), rush = false),
-
-        // Real generated boards, which is what a player actually gets. Three seeds, because the
-        // board shape changes how much defence fits.
-        Probe.play("generated #1", 20, generateMap(Random(1)), Spam(TowerKind.SQUARE), seed = 1),
-        Probe.play("generated #2", 20, generateMap(Random(2)), Spam(TowerKind.SQUARE), seed = 2),
-        Probe.play("generated #3", 20, generateMap(Random(3)), Spam(TowerKind.SQUARE), seed = 3),
+        Probe.play("open field", 20, Fixtures.openField(), Mazer(TowerKind.SQUARE)),
     )
 
     @Test

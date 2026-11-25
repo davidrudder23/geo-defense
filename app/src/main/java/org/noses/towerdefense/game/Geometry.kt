@@ -30,6 +30,15 @@ fun rayExit(origin: Point, dir: Point, width: Float, height: Float): Point {
 }
 
 /**
+ * How far along a ray leaving [origin] towards [dir] the [point] sits, or null if it is behind
+ * the origin. Paired with [offsetFromRay] to ask whether something is both in line and in reach.
+ */
+fun alongRay(point: Point, origin: Point, dir: Point): Float? {
+    val along = (point.x - origin.x) * dir.x + (point.y - origin.y) * dir.y
+    return if (along < 0f) null else along
+}
+
+/**
  * How far [point] sits off a ray leaving [origin] along the unit vector [dir], or null if it is
  * behind the origin and so cannot be hit.
  */

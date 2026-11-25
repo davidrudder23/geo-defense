@@ -10,7 +10,9 @@ I want to build a tower defense game.  The ultimate goal is to learn to make the
 * Portrait mode
 * Every game is either 10, 20, 25 or 30 waves
 * Maps are randomly created
-* There is no concert of easy or hard, just make the maps without worrying about difficulty
+* Difficulty rises with the wave number, resetting at wave one of each game. Wave 8 is wave 8
+  whatever the length, so a 30-wave game is harder than a 10-wave one rather than the same arc
+  stretched out - but the player has had thirty waves of income, building and route to match it
 * There should be these kinds of enemies
 	- Square - basic tank units
 	- Triangle - fast but weak
@@ -18,7 +20,8 @@ I want to build a tower defense game.  The ultimate goal is to learn to make the
 * These should be these weapon types
 	- Square - basic "one shot" bullets at a medium pace
 	- Hexagon - Explosions with area-of-effect damage.  Slow pace
-	- Plus-sign - Lasers that go through all the units until the end of the board
+	- Plus-sign - Lasers that go through every unit in line. Reaches further than the other two
+	  weapons, but under half the width of the board - not across the whole map
 * Add music.  Write the music yourself. It should be early-techno style, very simple
 
 ## Maps and movement
@@ -29,9 +32,6 @@ it from the entry to the exit.
 * A weapon can be placed anywhere on the open field
 * Maps are populated with fixed blockers that enemies cannot move through
 * Enemies cannot move through weapons either, so placing a weapon changes the path
-* The longer the player makes the route than the map's own shortest way, the more health the
-  enemies have, in proportion. Mazing buys time but costs toughness, so it is a trade rather than
-  a free win. The multiplier is shown in the top bar.
 * A placement that would leave no way at all from the entry to the exit is refused, and so is
   one that would strand an enemy already on the board. The board can be bent, not sealed.
 * A weapon cannot be dropped onto a cell an enemy is standing on or walking into

@@ -12,8 +12,11 @@ class GameEngineTest {
 
     private fun lane() = Fixtures.lane()
 
-    private fun engine(waves: Int = 10, map: GameMap = Fixtures.lane()) =
-        GameEngine(totalWaves = waves, map = map, random = Random(42))
+    private fun engine(
+        waves: Int = 10,
+        map: GameMap = Fixtures.lane(),
+        money: Int = STARTING_MONEY,
+    ) = GameEngine(totalWaves = waves, map = map, random = Random(42), startingMoney = money)
 
     /** Steps the simulation for [seconds] in frame-sized slices. */
     private fun GameEngine.run(seconds: Float, step: Float = 1f / 60f) {
@@ -51,8 +54,12 @@ class GameEngineTest {
         listOf(0, 3, 6, 9, 12).flatMap { row -> (0 until COLUMNS).map { Cell(it, row) } }
 
     /**
-     * Plays a whole game the way a player would: spends the money it has between waves, then
-     * starts the next wave. Enough to tell whether a game can actually be won.
+     * Plays a whole game the way a competent player would: builds what it can afford, levels up
+     * what it already has, then starts the next wave. Enough to tell whether a game can be won.
+     *
+     * The levelling is not decoration. Difficulty is keyed to the wave number now, so a defence
+     * that only ever widens and never deepens falls behind on purpose - a player who never
+     * upgrades is playing badly and is supposed to lose. This models someone who does not.
      */
     private fun GameEngine.autoPlay(kind: TowerKind = TowerKind.SQUARE, maxSeconds: Float = 2000f) {
         val spots = ArrayDeque(defensiveSpots())
@@ -61,6 +68,14 @@ class GameEngineTest {
             while (walk.hasNext()) {
                 if (money < statsFor(kind).cost) break
                 if (build(kind, walk.next())) walk.remove()
+            }
+            // Then pour whatever is left into levels, cheapest first.
+            while (true) {
+                val next = towers
+                    .filter { it.canUpgrade && (it.upgradeCost ?: Int.MAX_VALUE) <= money }
+                    .minByOrNull { it.upgradeCost ?: Int.MAX_VALUE }
+                    ?: return
+                if (!upgrade(next)) return
             }
         }
         var elapsed = 0f
@@ -217,11 +232,13 @@ class GameEngineTest {
 
     @Test
     fun `a tower cannot be upgraded past the top level`() {
-        val engine = engine()
+        // Rich on purpose: levels get steeply more expensive, and this test is about the cap
+        // rather than about affording it.
+        val engine = engine(money = 1_000_000)
         engine.build(TowerKind.SQUARE, Cell(1, 3))
         val tower = engine.towerAt(Cell(1, 3))!!
         while (tower.canUpgrade) {
-            assertTrue(engine.upgrade(tower))
+            assertTrue("ran out of money before the cap at level " + tower.level, engine.upgrade(tower))
         }
         assertEquals(MAX_TOWER_LEVEL, tower.level)
         assertNull(tower.upgradeCost)
@@ -245,20 +262,35 @@ class GameEngineTest {
 
     @Test
     fun `the laser hits every enemy in its line`() {
-        // A road that stops short of the bottom, with the laser directly below the end of it, so
-        // the beam runs straight up the road and through everything walking down it.
+        // A corridor that stops short of the bottom, with the laser just below the end of it, so
+        // the beam runs straight up the corridor and through everything walking down it.
         val shortRoad = Fixtures.stub()
         val engine = engine(map = shortRoad)
-        assertTrue(engine.build(TowerKind.PLUS, Cell(3, 12)))
+        val cell = Cell(3, 11)
+        assertTrue(engine.build(TowerKind.PLUS, cell))
+        val tower = engine.towerAt(cell)!!
         engine.startWave()
-        // Let several enemies string out along the road before the beam fires.
-        engine.run(3f)
-        val onRoad = engine.enemies.size
-        assertTrue("need several enemies to test piercing, had $onRoad", onRoad >= 2)
 
+        // The laser's reach is limited now, so the line-up has to walk into it first rather than
+        // being picked off from across the board.
+        fun inReach() = engine.enemies.count {
+            distanceBetween(it.position, tower.center) <= tower.range
+        }
+        var elapsed = 0f
+        while (elapsed < 30f && inReach() < 2) {
+            engine.update(1f / 60f)
+            elapsed += 1f / 60f
+        }
+        assertTrue("never got two enemies into the beam's reach", inReach() >= 2)
+
+        // One shot, and count what it touched: both the survivors it wounded and anything it
+        // finished off.
+        val before = engine.enemies.associate { it to it.hp }
+        val killedBefore = engine.enemiesKilled
         engine.run(1.3f)
-        val damaged = engine.enemies.count { it.hp < it.maxHp } + engine.enemiesKilled
-        assertTrue("the beam only touched $damaged enemies", damaged >= 2)
+        val wounded = engine.enemies.count { (before[it] ?: return@count false) > it.hp }
+        val struck = wounded + (engine.enemiesKilled - killedBefore)
+        assertTrue("the beam only touched $struck enemies", struck >= 2)
     }
 
     @Test

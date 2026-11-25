@@ -35,10 +35,10 @@ the difficulty curve is stretched to fit whatever length you choose, so the last
 - **Build anywhere.** There is no road. Towers are walls, so where you put them decides the
   route the enemies take. You cannot seal the exit off completely — that placement is refused.
   The dashed line shows the way through as it currently stands.
-- **Mazing is a trade, not a freebie.** The longer you make the walk, the tougher the enemies
-  arrive: double the path, double their health. A `MAZE` multiplier appears in the top bar once
-  you start bending the route, and it is exactly the multiplier being applied. Buying your towers
-  more time still works — it just costs something now.
+- **Build the long way round.** A longer route means more time under fire, so bending the path
+  back on itself is worth doing — and worth doing early, because the waves get harder every time.
+- **Pick your length deliberately.** Wave 8 is wave 8 in every game, so a 30-wave run is not a
+  10-wave run stretched out; it climbs far past where the short game stops.
 - **Pause, speed, music and effects** sit in the top right. Music and effects mute separately,
   so you can keep the shots and drop the backing track. Speed cycles 1x, 2x, 5x and back to 1x.
   Building, upgrading and selling all still work while paused.

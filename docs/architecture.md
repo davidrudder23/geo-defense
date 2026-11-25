@@ -169,40 +169,6 @@ Two things that look like edge cases and are not:
 - A cell an enemy is standing on, or walking into, is refused outright. Dropping a wall on top
   of something is not a routing question.
 
-## What the maze costs
-
-Towers are walls, so a player can stretch a short walk into a long one and give their defence
-many times as long to work. Measured, that was worth more than every other advantage put
-together: on an open board, mazing alone turned the one losing run in the report into a clean
-sweep, and dropped how far enemies got from 100% of the route to 23%. Left alone, mazing is not a
-strategy, it is *the* answer, and the rest of the game is decoration.
-
-So enemies are tougher in proportion to the extra walking the player caused:
-
-```kotlin
-val mazeFactor = currentRouteLength / directSteps     // never below 1
-val threatScale = 1f + MAZE_THREAT * (mazeFactor - 1f)
-```
-
-Mazing is still good — more time under fire is still more time under fire — but it is now a trade
-rather than free, which is what makes it a decision instead of a formality.
-
-Three details carry the design:
-
-- **The baseline is the map's own shortest route, not a straight line.** Only the length the
-  *player* added counts. A board that generated a winding way through is the map's character, and
-  measuring against a straight line would hand that board to the player pre-punished.
-- **The scale is read as each enemy spawns, not when the wave starts.** Building during a wave is
-  allowed, so a wave-start reading could be dodged completely: keep the path short, start the wave
-  cheap, then wall it up once the enemies are committed. Reading it per spawn closes that, because
-  later arrivals in the same wave answer for the maze as it is when they set off. There is a test
-  for exactly that hole (`mazing once a wave is running still counts`).
-- **It is on the HUD.** A `MAZE 2.4x` stat appears next to the wave counter once the factor passes
-  1.05, so it shows up at the moment it starts to matter. A rule the player can see is a rule; the
-  same rule hidden reads as the game cheating.
-
-`MAZE_THREAT` is the one knob: 1 is proportional, 0 turns the whole thing off.
-
 ## The wave timer
 
 Between waves a 15 second clock runs, after which the next wave arrives on its own. Pressing the
@@ -216,21 +182,40 @@ The bonus is computed from the number *rounded up*, which is the same number the
 showing. Whatever it says when it is pressed is what gets paid; a bonus that disagreed with the
 display by one would read as a bug.
 
-## Difficulty, and what "no easy or hard" means
+## Difficulty, and what the wave count means
 
-The brief said not to worry about difficulty, and that every game is 10, 20, 25 or 30 waves.
-Those two together suggest something specific: the wave count should change how *long* you play,
-not how *hard* it gets.
-
-So `buildWave` scales off **progress through the game**, not the wave number:
+Every game is 10, 20, 25 or 30 waves, and `buildWave` scales off the wave's **own number** rather
+than how far through the game it sits:
 
 ```kotlin
-val progress = (number - 1).toFloat() / (totalWaves - 1)
+hpScale = HP_PER_WAVE.pow(number - 1)
 ```
 
-Wave 10 of 10 and wave 30 of 30 are near enough identical. A 30-wave game is not three times
-harder than a 10-wave game, it is the same arc stretched out. There is a test pinning this
-(`the difficulty arc is the same shape whatever the game length`).
+So wave 8 is wave 8 in every game, and choosing a longer game is choosing a harder one: a 10-wave
+game is a sampler, 20 is a real game, and 30 climbs well past where either of them stops. Two
+tests pin this down - `a wave is the same wave whatever the game length` and `choosing a longer
+game is choosing a harder one`.
+
+This replaced an earlier design where difficulty scaled on *progress*, so every game length ended
+at the same peak and the wave count changed only how long you sat there. The reason for the swap
+is that the player is not standing still either: thirty waves is also thirty waves of income, of
+building, and of route to lengthen, so the longer game can afford to ask for more.
+
+The curve compounds rather than adds, because the *ratio* between consecutive waves is what a
+player feels. A flat increment makes wave 2 twice wave 1 and wave 20 a few percent above wave 19:
+the whole spike lands at the start and the game flattens out exactly when it should be tightening.
+
+### Why the tower level cap is deep
+
+`MAX_TOWER_LEVEL` is 8, and each level costs about 1.85x the one before. That is not generosity,
+it is a consequence of the above. With difficulty keyed to the wave number, a player whose power
+stops growing is overtaken for certain, and measurement showed exactly that: with a cap of 3, a
+30-wave game ended with the defence maxed out at 48 towers, **5,500 gold banked with nothing to
+spend it on**, and the waves walking straight past it.
+
+The cost ratio is close to the power a level buys (1.55x damage at 0.85x reload, so about 1.8x
+output). Pricing them alike keeps gold worth about the same spent deep or spent wide, so the
+choice between them is about board space and timing rather than one of them simply being correct.
 
 ## Measuring difficulty
 
