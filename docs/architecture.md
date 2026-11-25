@@ -188,13 +188,26 @@ Every game is 10, 20, 25 or 30 waves, and `buildWave` scales off the wave's **ow
 than how far through the game it sits:
 
 ```kotlin
-hpScale = HP_PER_WAVE.pow(number - 1)
+hpScale = scale * (1f + growth * (number - 1)).pow(exponent)
 ```
 
 So wave 8 is wave 8 in every game, and choosing a longer game is choosing a harder one: a 10-wave
 game is a sampler, 20 is a real game, and 30 climbs well past where either of them stops. Two
 tests pin this down - `a wave is the same wave whatever the game length` and `choosing a longer
 game is choosing a harder one`.
+
+### Why it is a power law and not a compounding rate
+
+The curve used to be `rate^(number - 1)`, a fixed percentage per wave. That shape cannot be tuned
+to fit, and the reason is worth keeping: an exponential and the player's power are different kinds
+of function. Player power comes out of *cumulative* income, which grows about quadratically, so an
+exponential wave curve crosses it steeply - the game is trivial on one side of the crossing and
+hopeless on the other, with nothing in between to aim at. Measurement showed it exactly: 29 waves
+with zero leaks, then 16 of 20 lives gone on wave 30.
+
+A power law rises on the same sort of terms as the thing it is racing. The ratio between
+consecutive waves decelerates - early waves climb steeply, late ones level off - which is what
+lets the difficulty sit *near* the player's power for a long stretch instead of crossing it once.
 
 This replaced an earlier design where difficulty scaled on *progress*, so every game length ended
 at the same peak and the wave count changed only how long you sat there. The reason for the swap
@@ -216,6 +229,35 @@ spend it on**, and the waves walking straight past it.
 The cost ratio is close to the power a level buys (1.55x damage at 0.85x reload, so about 1.8x
 output). Pricing them alike keeps gold worth about the same spent deep or spent wide, so the
 choice between them is about board space and timing rather than one of them simply being correct.
+
+### The economy and the life budget also scale
+
+Two things scale with the game beside enemy health, and neither was a decoration - without them a
+30-wave game cannot be made tough-but-winnable at all.
+
+**Kills pay more in later waves** (`rewardGrowth`). The board only fits so many towers, so past a
+point the only way to get stronger is to buy levels. A 30-wave game was ending with 10,262 gold
+invested and 672 in hand: the player was not saturated, they were *broke*. Every curve that made
+wave 20 cost lives then lost wave 30 outright, because income could not keep pace with its own
+difficulty. The effect compounds more at wave 30 than at wave 10, which is where it is needed.
+
+**Longer games start with more lives** (`startingLivesFor`): 20 for a 10-wave game, 30 for 20
+waves, 40 for 30. The life pool is the budget for a whole run. Once the late waves cost a few
+lives each - which is what "tough" means - ten waves of that drains twenty lives no matter how the
+curve is shaped, and measurement bore it out: every curve that made wave 20 cost anything lost
+wave 30, and not to a spike. The worst single wave was four to six lives. It simply bled out.
+
+### Boards have to be comparable before a curve means anything
+
+`generateMap` draws up to 200 boards and keeps the first whose walk is at least 45 steps, at 24%
+blocker density. That is not cosmetic. Route length drives difficulty more than any other single
+thing, and a single random draw gave anywhere from 19 to 74 steps - which is not a difficulty
+curve, it is a lottery. Ten rounds of tuning were quietly fitting one map: the curve that won
+every game on it lost the 20- and 30-wave games on two other boards.
+
+Holding the walk to a narrow band is what makes one curve meaningful. It is not sufficient, though
+- at matched length, board *shape* still swings the outcome, so the sweep scores every curve on
+three boards at three lengths and a curve has to survive the hardest of them, not the luckiest.
 
 ## Measuring difficulty
 
@@ -250,9 +292,21 @@ towers, and `Mazer` puts every tower wherever it makes the walk longest. `Mazer`
 watching, since "build the longest possible snake" is available as a single dominant answer, and
 if it is far stronger than placing towers sensibly then the maze is the whole game.
 
-**What it found.** Every scenario won, and all but one won with 20 of 20 lives and not a single
-leak, so the per-wave curve is flat zero almost everywhere. Three things stand out, and none of
-them are "enemies need more HP":
+**What the tuned curve does.** Nine games - three lengths on three boards - with `Mazer`, which
+is close to an optimal player:
+
+| waves | lives left, by board | what it reads as |
+|---:|---|---|
+| 10 | 20/20, 17/20, 20/20 | easy; a leak or two at worst |
+| 20 | 30/30, 21/30, 24/30 | costs real lives on two boards of three |
+| 30 | 35/40, 12/40, 22/40 | tough everywhere; one board came down to 12 |
+
+Two caveats worth keeping. A near-optimal player still finds the 20-wave game free on one board of
+three, so "difficult at 20" is partly a property of the draw rather than the curve. And `Mazer`
+plays better than a person will, so a human should expect to do worse than every row above.
+
+**What the probe found earlier.** Three things stood out, and none of them were "enemies need more
+HP":
 
 - **The maze is the dominant lever, by a long way.** Three runs on an open field, differing by one
   thing each, separate it from the upgrades it is normally tangled up with:

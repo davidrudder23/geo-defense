@@ -7,6 +7,17 @@ import kotlin.random.Random
 const val STARTING_MONEY = 120
 const val STARTING_LIVES = 20
 
+/**
+ * Lives for a game of [totalWaves] waves.
+ *
+ * The life pool is the budget for a whole run, so a longer run gets a bigger one. Without this a
+ * 30-wave game cannot be tuned to be tough-but-winnable at all: once the late waves cost a few
+ * lives each - which is what "tough" means - ten waves of that drains twenty lives no matter how
+ * the curve is shaped. Measured, every curve that made wave 20 cost anything lost wave 30, and
+ * not to a spike: the worst single wave was four to six lives. It simply bled out.
+ */
+fun startingLivesFor(totalWaves: Int): Int = STARTING_LIVES + (totalWaves - 10).coerceAtLeast(0)
+
 /** Half the width of the laser line, in cells. */
 private const val BEAM_HALF_WIDTH = 0.22f
 
@@ -47,11 +58,16 @@ class GameEngine(
     private val random: Random = Random.Default,
     /** Opening cash. A parameter so a test can set up a rich board without reaching into state. */
     startingMoney: Int = STARTING_MONEY,
+    /** The difficulty curve. A parameter so the probe can sweep it without a rebuild. */
+    private val curve: DifficultyCurve = DifficultyCurve(),
 ) {
     var money: Int = startingMoney
         private set
-    var lives: Int = STARTING_LIVES
+    var lives: Int = startingLivesFor(totalWaves)
         private set
+
+    /** What [lives] began at, so a HUD or a report can show the fraction left. */
+    val startingLives: Int = startingLivesFor(totalWaves)
     var waveNumber: Int = 0
         private set
     var phase: Phase = Phase.READY
@@ -128,7 +144,7 @@ class GameEngine(
         }
         readySeconds = 0f
         waveNumber++
-        wave = buildWave(waveNumber, totalWaves, random)
+        wave = buildWave(waveNumber, totalWaves, random, curve)
         waveClock = 0f
         spawned = 0
         phase = Phase.RUNNING
@@ -261,7 +277,7 @@ class GameEngine(
         while (spawned < wave.size && wave.spawns[spawned].time <= waveClock) {
             val spawn = wave.spawns[spawned]
             enemies.add(
-                Enemy(statsFor(spawn.kind), wave.hpScale, wave.speedScale)
+                Enemy(statsFor(spawn.kind), wave.hpScale, wave.speedScale, wave.rewardScale)
                     .apply { spawnAt(map.entry, flow) }
             )
             spawned++
@@ -405,7 +421,7 @@ class GameEngine(
         while (walkers.hasNext()) {
             val enemy = walkers.next()
             if (!enemy.alive) {
-                money += enemy.stats.reward
+                money += enemy.bounty
                 enemiesKilled++
                 pendingSounds.add(deathCueFor(enemy.kind))
                 walkers.remove()

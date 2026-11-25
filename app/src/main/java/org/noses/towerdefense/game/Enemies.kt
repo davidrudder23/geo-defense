@@ -45,7 +45,15 @@ fun statsFor(kind: EnemyKind): EnemyStats = when (kind) {
  * next. Because the field is shared and rebuilt whenever the maze changes, an enemy re-routes
  * mid-stride the moment a tower goes up — it simply gets a different answer next time it asks.
  */
-class Enemy(val stats: EnemyStats, hpScale: Float = 1f, val speedScale: Float = 1f) {
+class Enemy(
+    val stats: EnemyStats,
+    hpScale: Float = 1f,
+    val speedScale: Float = 1f,
+    rewardScale: Float = 1f,
+) {
+    /** What killing this one pays. Fixed when it spawns, so it cannot shift under the player. */
+    val bounty: Int = max(1, (stats.reward * rewardScale).roundToInt())
+
     val maxHp: Int = max(1, (stats.baseHp * hpScale).roundToInt())
     var hp: Int = maxHp
         private set

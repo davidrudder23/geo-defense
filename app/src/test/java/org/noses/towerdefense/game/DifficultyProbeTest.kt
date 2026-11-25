@@ -19,21 +19,27 @@ class DifficultyProbeTest {
     private fun board() = generateMap(Random(7))
 
     private fun scenarios(): List<GameRun> = listOf(
-        // The headline question now that difficulty is keyed to the wave number: does each
-        // length land where it should? Same board, same competent player, three game lengths.
-        // 10 should be a sampler, 20 a real game, 30 an endurance run.
+        // The three targets the curve was tuned against: 10 easy, 20 difficult but beatable,
+        // 30 tough. Same board and the same competent player, so only the length differs.
         Probe.play("generated", 10, board(), Mazer(TowerKind.SQUARE), seed = 7),
         Probe.play("generated", 20, board(), Mazer(TowerKind.SQUARE), seed = 7),
         Probe.play("generated", 30, board(), Mazer(TowerKind.SQUARE), seed = 7),
 
-        // The same three for a player who builds and levels well but never lengthens the route.
-        // Mazing is meant to be worth doing, so these should sit behind the runs above.
-        Probe.play("no maze", 10, board(), Upgrader(TowerKind.SQUARE, 6), seed = 7),
+        // The same three on other boards, because the tuning was all done against one map and a
+        // curve that only works on that map is not tuned, it is overfitted.
+        Probe.play("seed 2", 10, generateMap(Random(2)), Mazer(TowerKind.SQUARE), seed = 2),
+        Probe.play("seed 2", 20, generateMap(Random(2)), Mazer(TowerKind.SQUARE), seed = 2),
+        Probe.play("seed 2", 30, generateMap(Random(2)), Mazer(TowerKind.SQUARE), seed = 2),
+        Probe.play("seed 5", 10, generateMap(Random(5)), Mazer(TowerKind.SQUARE), seed = 5),
+        Probe.play("seed 5", 20, generateMap(Random(5)), Mazer(TowerKind.SQUARE), seed = 5),
+        Probe.play("seed 5", 30, generateMap(Random(5)), Mazer(TowerKind.SQUARE), seed = 5),
+
+        // A player who levels well but never lengthens the route. Mazing should be worth doing,
+        // so these ought to sit behind the runs above rather than alongside them.
         Probe.play("no maze", 20, board(), Upgrader(TowerKind.SQUARE, 6), seed = 7),
         Probe.play("no maze", 30, board(), Upgrader(TowerKind.SQUARE, 6), seed = 7),
 
-        // The floor: never upgrades at all. Expected to fall behind, since difficulty now
-        // climbs with the wave number whether or not the defence deepens.
+        // The floor: never upgrades at all.
         Probe.play("no levels", 10, board(), Spam(TowerKind.SQUARE), seed = 7),
         Probe.play("no levels", 20, board(), Spam(TowerKind.SQUARE), seed = 7),
 
@@ -42,11 +48,6 @@ class DifficultyProbeTest {
         Probe.play("kinds", 20, Fixtures.serpentine(), Upgrader(TowerKind.HEXAGON, 4)),
         Probe.play("kinds", 20, Fixtures.serpentine(), Upgrader(TowerKind.PLUS, 4)),
         Probe.play("kinds", 20, Fixtures.serpentine(), Mixed(levelUp = true)),
-
-        // A couple of fixed boards, so a run of the report is comparable with the last one even
-        // when map generation changes.
-        Probe.play("serpentine", 20, Fixtures.serpentine(), Mazer(TowerKind.SQUARE)),
-        Probe.play("open field", 20, Fixtures.openField(), Mazer(TowerKind.SQUARE)),
     )
 
     @Test
@@ -68,7 +69,9 @@ class DifficultyProbeTest {
 
     @Test
     fun `the probe records every wave it played`() {
-        val run = Probe.play("serpentine", 10, Fixtures.serpentine(), Spam(TowerKind.SQUARE))
+        // A competent player, because the probe is what is under test here, not the balance: a
+        // stand-in that never upgrades no longer survives ten waves.
+        val run = Probe.play("serpentine", 10, Fixtures.serpentine(), Mazer(TowerKind.SQUARE))
         // A game that was not lost must have a row for every wave, numbered in order from one.
         assertEquals(Phase.WON, run.outcome)
         assertEquals(10, run.rows.size)
@@ -77,7 +80,7 @@ class DifficultyProbeTest {
 
     @Test
     fun `the probe measures something on every wave`() {
-        val run = Probe.play("serpentine", 10, Fixtures.serpentine(), Spam(TowerKind.SQUARE))
+        val run = Probe.play("serpentine", 10, Fixtures.serpentine(), Mazer(TowerKind.SQUARE))
         for (row in run.rows) {
             assertTrue("wave ${row.wave} had no enemies", row.enemies > 0)
             assertTrue("wave ${row.wave} resolved instantly", row.seconds > 0f)
@@ -93,7 +96,7 @@ class DifficultyProbeTest {
 
     @Test
     fun `leaks and lives agree with each other`() {
-        val run = Probe.play("serpentine", 20, Fixtures.serpentine(), Spam(TowerKind.SQUARE))
+        val run = Probe.play("serpentine", 20, Fixtures.serpentine(), Mazer(TowerKind.SQUARE))
         assertEquals(run.livesLost, run.rows.sumOf { it.livesLost })
         // Nothing but a leak costs a life, and the cheapest leak costs one.
         for (row in run.rows) {

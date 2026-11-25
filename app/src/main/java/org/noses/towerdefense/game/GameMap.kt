@@ -55,12 +55,59 @@ class GameMap(
  * steer around instead of a scattering of dots. Each wall is only kept if the exit is still
  * reachable from the entry afterwards, so a generated map always has a way through.
  */
+/**
+ * How many boards to draw before keeping one.
+ *
+ * Difficulty turned out to depend on the length of the walk more than on anything else, and a
+ * single random board gave anywhere from 19 to 60 steps. That is not a difficulty curve, it is a
+ * lottery: a balance that worked on one generated map lost every game on another. Drawing a
+ * handful and keeping the longest pulls the spread in tight enough that one curve can fit.
+ */
+private const val BOARD_CANDIDATES = 200
+
+/**
+ * The shortest way through that a board is allowed to have.
+ *
+ * Best-of-a-handful was not enough: one seed still produced a 31-step board where another gave
+ * 63, and that board lost every game. A floor is what actually bounds the spread.
+ */
+private const val MIN_ROUTE_STEPS = 55
+
+/** Steps from entry to exit with nothing built, which is the number that matters. */
+private fun routeLength(map: GameMap): Int =
+    flowFieldTo(map.exit) { map.isOpen(it) }[map.entry]
+
+/**
+ * A board to play on.
+ *
+ * Draws several and keeps the one with the longest way through, so boards are comparable with
+ * each other. See [BOARD_CANDIDATES].
+ */
 fun generateMap(random: Random = Random.Default): GameMap {
+    var best: GameMap? = null
+    var bestLength = -1
+    repeat(BOARD_CANDIDATES) {
+        val candidate = drawMap(random)
+        val length = routeLength(candidate)
+        if (length != UNREACHABLE && length > bestLength) {
+            best = candidate
+            bestLength = length
+        }
+        // Good enough is good enough; no need to draw the rest.
+        if (bestLength >= MIN_ROUTE_STEPS) return best!!
+    }
+    return best ?: drawMap(random)
+}
+
+private fun drawMap(random: Random): GameMap {
     val entry = Cell(random.nextInt(COLUMNS), 0)
     val exit = Cell(random.nextInt(COLUMNS), ROWS - 1)
 
     val blockers = HashSet<Cell>()
-    val wanted = (COLUMNS * ROWS * 0.17f).toInt()
+    // Denser than it looks like it needs to be. Blockers are what make the walk long, and the
+    // length of the walk turned out to drive difficulty more than any other single thing, so a
+    // sparse board is not just an easy board - it is an unbalanceable one.
+    val wanted = (COLUMNS * ROWS * 0.24f).toInt()
 
     var attempts = 0
     while (blockers.size < wanted && attempts < 400) {

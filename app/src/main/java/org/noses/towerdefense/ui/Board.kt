@@ -169,7 +169,6 @@ private fun DrawScope.drawGates(engine: GameEngine, projection: Projection) {
 }
 
 private fun DrawScope.drawRange(tower: Tower, projection: Projection) {
-    if (tower.kind == TowerKind.PLUS) return // The laser reaches the whole board.
     drawCircle(
         color = colorOf(tower.kind).copy(alpha = 0.1f),
         radius = projection.lengthOf(tower.range),

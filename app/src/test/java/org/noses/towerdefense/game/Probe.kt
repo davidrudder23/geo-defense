@@ -60,10 +60,16 @@ data class GameRun(
     val totalWaves: Int,
     val outcome: Phase,
     val livesLeft: Int,
+    val startingLives: Int,
     val rows: List<WaveRow>,
 ) {
+    /** How much of the life budget survived, 0 to 1. Comparable across game lengths. */
+    val livesFraction: Float get() = livesLeft.toFloat() / startingLives
     val leaks: Int get() = rows.sumOf { it.leaked }
-    val livesLost: Int get() = STARTING_LIVES - livesLeft
+
+    /** The worst single wave, in lives. A difficulty curve should not hide a cliff. */
+    val worstWave: Int get() = rows.maxOfOrNull { it.livesLost } ?: 0
+    val livesLost: Int get() = startingLives - livesLeft
     val peakReach: Float get() = rows.maxOfOrNull { it.reach } ?: 0f
 
     /** Route length on the last wave, which is how long a maze the player ended up with. */
@@ -80,8 +86,8 @@ data class GameRun(
         outcome == Phase.LOST -> "LOST on wave ${rows.size}"
         leaks == 0 && peakReach < 0.85f -> "TOO EASY - never threatened"
         leaks == 0 -> "CLEAN - won without a leak, but enemies got close"
-        livesLeft > STARTING_LIVES * 2 / 3 -> "WORKABLE - leaked, never in danger"
-        livesLeft > STARTING_LIVES / 3 -> "GOOD - cost real lives and still won"
+        livesFraction > 0.66f -> "WORKABLE - leaked, never in danger"
+        livesFraction > 0.33f -> "GOOD - cost real lives and still won"
         else -> "TENSE - won on the last few lives"
     }
 }
@@ -271,8 +277,14 @@ object Probe {
         strategy: Strategy,
         seed: Int = 42,
         rush: Boolean = true,
+        curve: DifficultyCurve = DifficultyCurve(),
     ): GameRun {
-        val engine = GameEngine(totalWaves = totalWaves, map = map, random = Random(seed))
+        val engine = GameEngine(
+            totalWaves = totalWaves,
+            map = map,
+            random = Random(seed),
+            curve = curve,
+        )
         val rows = ArrayList<WaveRow>()
 
         while (!engine.finished && rows.size < totalWaves) {
@@ -339,7 +351,10 @@ object Probe {
             )
         }
 
-        return GameRun(label, strategy.name, totalWaves, engine.phase, engine.lives, rows)
+        return GameRun(
+            label, strategy.name, totalWaves, engine.phase, engine.lives,
+            engine.startingLives, rows,
+        )
     }
 
     // --- printing -------------------------------------------------------------------------------
@@ -365,7 +380,7 @@ object Probe {
             String.format(
                 Locale.ROOT,
                 "%s | lives %d/%d | leaks %d | peak reach %.0f%% | wealth %d",
-                run.outcome, run.livesLeft, STARTING_LIVES, run.leaks,
+                run.outcome, run.livesLeft, run.startingLives, run.leaks,
                 run.peakReach * 100f, run.wealth,
             ),
         )
@@ -403,7 +418,7 @@ object Probe {
                     Locale.ROOT,
                     "| %s | %s | %d | %s | %d/%d | %d | %.0f%% | %d |",
                     run.label, run.strategy, run.totalWaves, run.outcome,
-                    run.livesLeft, STARTING_LIVES, run.leaks, run.peakReach * 100f,
+                    run.livesLeft, run.startingLives, run.leaks, run.peakReach * 100f,
                     run.finalRoute,
                 ),
             )

@@ -33,6 +33,8 @@ android {
             it.testLogging {
                 showStandardStreams = true
             }
+            // Forwards -Dsweep=1 to the test JVM, which is how the slow curve sweep is opted in.
+            it.systemProperty("sweep", System.getProperty("sweep") ?: "")
         }
     }
 }

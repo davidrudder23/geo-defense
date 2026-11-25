@@ -23,13 +23,16 @@ The APK lands in `app/build/outputs/apk/debug/app-debug.apk`.
 
 ## How to play
 
-Pick a game length on the menu: **10, 20, 25 or 30 waves**. Longer games are not harder games —
-the difficulty curve is stretched to fit whatever length you choose, so the last wave of a
-10-wave game is about as nasty as the last wave of a 30-wave game.
+Pick a game length on the menu: **10, 20, 25 or 30 waves**. Longer games *are* harder games: each
+wave scales off its own number, so wave 8 is wave 8 whatever length you picked, and a 30-wave game
+climbs well past where a 10-wave one stops. A 10-wave game is a sampler, 20 is a real game, and 30
+is meant to be tough. Longer games also start with more lives — 20, 30 and 40 — and pay more per
+kill in the later waves, because the defence has to keep growing to stay level with the waves.
 
 - **Build**: tap a tower in the bottom bar to arm it, then tap any free cell. Free cells show a
   green dot while a tower is armed.
-- **Upgrade or sell**: tap a tower you have already built. Three levels; selling refunds 60%.
+- **Upgrade or sell**: tap a tower you have already built. Eight levels, each costing about 1.85x
+  the one before; selling refunds 60%.
 - **Start the wave** when you are ready — or wait, and it starts itself. The button counts
   down from 15 seconds, and pressing it early pays 2 gold per second you hand back.
 - **Build anywhere.** There is no road. Towers are walls, so where you put them decides the
@@ -104,7 +107,12 @@ The numbers worth playing with, all in one place each:
 - **Tower stats** — `Towers.kt`, the three `TowerStats` values. Upgrade scaling is in the `Tower`
   class below them.
 - **Wave composition and difficulty curve** — `buildWave` in `Waves.kt`.
-- **Starting money and lives** — the constants at the top of `GameEngine.kt`.
+- **Starting money and lives** — the constants at the top of `GameEngine.kt`. Lives scale with the
+  game length in `startingLivesFor`.
+- **Difficulty curve** — `DifficultyCurve` in `Waves.kt`: enemy health, and how fast kills start
+  paying more. `CurveSweepTest` is the grid search that picked the current values.
+- **Board generation** — `GameMap.kt`. Boards are drawn repeatedly and filtered on route length,
+  because a board's route length drives difficulty more than anything else does.
 - **Board size** — `COLUMNS` and `ROWS` in `GameMap.kt`. The board scales to fit the screen.
 - **Colours** — `Palette.kt`.
 
@@ -124,10 +132,13 @@ built. Zero leaks can mean "comfortable" or "died on the last tower", and `reach
 those apart. Several stand-in players run, because difficulty is a property of the player and the
 waves together, not of the waves alone.
 
-As of the current numbers every scenario wins, and all but one wins with all 20 lives and no
-leaks at all, so the curve is flat. The exception is telling: the only run that leaked is the one
-where the stand-in player built no maze. `docs/architecture.md` has what the report says about
-why.
+As of the current numbers a near-optimal stand-in wins all three lengths on all three boards, and
+the cost climbs with length: a 10-wave game takes 0–3 lives of 20, a 20-wave game 0–9 of 30, and a
+30-wave game 5–28 of 40. A player who never upgrades still loses by wave 10, which is the floor
+working. Two honest caveats: on one board of three the 20-wave game is still free, so "difficult"
+there depends partly on the draw; and the stand-in plays better than a person will.
+`docs/architecture.md` has the rest, including why the curve is a power law rather than a
+compounding rate, and why boards have to be made comparable before a curve means anything.
 
 ## The music
 
